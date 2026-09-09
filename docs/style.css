@@ -5,3 +5,5 @@
 .sample-label>span:first-child{color:var(--primary);letter-spacing:1px}
 
 .header-links{display:flex;align-items:center;gap:18px;flex-shrink:0}.github-badge{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;padding:8px 14px;font-size:14px;font-weight:600;text-decoration:none;color:var(--foreground)}.github-badge:hover{border-color:var(--primary);color:var(--primary)}@media(max-width:600px){header{flex-wrap:wrap}.header-links{gap:14px}.github-badge{padding:7px 12px}}
+
+.download-count{margin:16px 0 0}.download-count a{display:inline-block}.download-count img{display:block;height:20px;max-width:100%}

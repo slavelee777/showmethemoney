@@ -1,5 +1,7 @@
 # Show Me The Money
 
+[![GitHub release downloads](https://img.shields.io/github/downloads/dlgudrms/showmethemoney/total?label=downloads&color=c1f76c&labelColor=192219)](https://github.com/dlgudrms/showmethemoney/releases "All release downloads / 전체 릴리스 다운로드 횟수")
+
 작업하다가 주가 하나만 슬쩍 보고 싶어서 만들었습니다.
 Mac은 상단 메뉴바에, Windows는 작업표시줄 위 작은 창에 가격을 띄워줍니다. 무료입니다.
 
