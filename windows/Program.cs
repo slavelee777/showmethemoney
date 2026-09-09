@@ -192,6 +192,7 @@ sealed class StockApp : ApplicationContext
     Settings settings;
     Quote? quote;
     bool failed, exiting;
+    int failures;
     CancellationTokenSource? request;
     public StockApp(string? testDirectory = null)
     {
@@ -204,6 +205,9 @@ sealed class StockApp : ApplicationContext
         price.Click += (_, _) => search.Open();
         tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) search.Open(); };
         timer.Tick += async (_, _) => await Refresh();
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += DisplayChanged;
+        Microsoft.Win32.SystemEvents.PowerModeChanged += PowerChanged;
+        ticker.DpiChanged += (_, _) => Render();
         SetMenu(); Render();
         timer.Interval = Market.Interval(settings.Selected?.Symbol); timer.Start();
         _ = search.Handle;
@@ -222,6 +226,13 @@ sealed class StockApp : ApplicationContext
             smoke.Start();
         }
     }
+    void DisplayChanged(object? sender, EventArgs e) {
+        if (!exiting && search.IsHandleCreated) search.BeginInvoke(new Action(() => { if (!exiting) Render(); }));
+    }
+    void PowerChanged(object sender, Microsoft.Win32.PowerModeChangedEventArgs e) {
+        if (e.Mode == Microsoft.Win32.PowerModes.Resume && !exiting && search.IsHandleCreated)
+            search.BeginInvoke(new Action(() => { if (!exiting) _ = Refresh(); }));
+    }
     bool Commit(Settings next)
     {
         try { SettingsStore.Save(directory, next); }
@@ -237,7 +248,7 @@ sealed class StockApp : ApplicationContext
         // Save before replacing the live state, then cancel any previous-symbol request.
         try { SettingsStore.Save(directory, next); }
         catch { search.Error(T("설정 저장 실패", "Could not save settings")); return false; }
-        request?.Cancel(); request = null; settings = next; quote = null; failed = false;
+        request?.Cancel(); request = null; settings = next; quote = null; failed = false; failures = 0;
         search.LoadHolding(); Render(); ticker.Show();
         timer.Interval = Market.Interval(stock.Symbol);
         _ = Refresh(); return true;
@@ -257,26 +268,36 @@ sealed class StockApp : ApplicationContext
         tooltip.SetToolTip(price, detail);
         search.UpdateQuote(quote, failed);
         var area = Screen.FromControl(ticker).WorkingArea;
-        ticker.Width = Math.Min(area.Width, Math.Max(160, TextRenderer.MeasureText(price.Text, price.Font).Width + 28));
-        ticker.Location = new Point(area.Right - ticker.Width - 4, area.Bottom - ticker.Height - 4);
+        ticker.Width = Math.Min(Math.Max(1, area.Width - 8), Math.Max(160, TextRenderer.MeasureText(price.Text, price.Font).Width + 28));
+        ticker.Location = new Point(Math.Max(area.Left, area.Right - ticker.Width - 4), Math.Max(area.Top, area.Bottom - ticker.Height - 4));
     }
     async Task Refresh()
     {
         if (exiting || settings.Selected is not Stock stock || request is not null) return;
+        timer.Stop();
         var source = new CancellationTokenSource(); request = source;
         try
         {
             var result = await Market.Latest(stock.Symbol, source.Token);
             source.Token.ThrowIfCancellationRequested();
             if (exiting) return;
-            quote = result; failed = false; Render();
+            quote = result; failed = false; failures = 0; Render();
         }
-        catch { if (!source.IsCancellationRequested && !exiting) { failed = true; Render(); } }
-        finally { if (request == source) request = null; source.Dispose(); }
+        catch { if (!source.IsCancellationRequested && !exiting) { failed = true; failures = Math.Min(failures + 1, 5); Render(); } }
+        finally {
+            if (request == source) {
+                request = null;
+                if (!exiting) { timer.Interval = Market.PollDelay(stock.Symbol, quote, failures); timer.Start(); }
+            }
+            source.Dispose();
+        }
     }
     protected override void ExitThreadCore()
     {
-        exiting = true; timer.Stop(); timer.Dispose(); request?.Cancel();
+        exiting = true;
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= DisplayChanged;
+        Microsoft.Win32.SystemEvents.PowerModeChanged -= PowerChanged;
+        timer.Stop(); timer.Dispose(); request?.Cancel();
         tray.Visible = false; tray.ContextMenuStrip?.Dispose(); tray.Dispose();
         search.Dispose(); ticker.Dispose(); tooltip.Dispose(); appIcon.Dispose();
         base.ExitThreadCore();

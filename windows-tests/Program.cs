@@ -68,3 +68,16 @@ if (args.Contains("--live"))
     Console.WriteLine($"LIVE: price={quote.Price} quoteTime={quote.Time:O} ageSeconds={(DateTimeOffset.UtcNow - quote.Time).TotalSeconds:F0}");
 }
 Console.WriteLine($"PASS: {count} Windows core checks (quotes, positions, localization, migration, persistence, donation)");
+Check(Market.Symbol("086520") == "086520.KQ", "bare known KOSDAQ code");
+Check(Market.Symbol("123456") is null, "unknown bare code must resolve exchange");
+using var identity = JsonDocument.Parse("""{"itemCode":"123456","stockName":"Example","stockExchangeType":{"code":"KQ"}}""");
+Check(Market.ParseIdentity(identity.RootElement,"123456").Symbol == "123456.KQ", "provider resolves unknown KOSDAQ code");
+Reject(() => Market.ParseIdentity(identity.RootElement,"000000"), "reject mismatched identity");
+Check(Market.PollDelay("005930.KS", kr, 0) == 7000, "open market polling");
+Check(Market.PollDelay("005930.KS", kr with { Open=false }, 0) == 60000, "closed market polling");
+Check(Market.PollDelay("AAPL", us, 0) == 15000, "unknown session retains normal polling");
+Check(Market.PollDelay("AAPL", us, 1) == 30000 && Market.PollDelay("AAPL", us, 2) == 60000 && Market.PollDelay("AAPL", us, 100) == 300000, "bounded retry backoff");
+Check(Market.PollDelay("AAPL", us, 0) == 15000, "successful request resets delay");
+using var zeroYahoo = JsonDocument.Parse("""{"chart":{"result":[{"meta":{"regularMarketPrice":0,"regularMarketTime":1700000000}}]}}""");
+Reject(() => Market.ParseYahoo(zeroYahoo.RootElement), "zero Yahoo price rejected");
+Console.WriteLine($"PASS: {count} total Windows core checks");

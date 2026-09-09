@@ -1,0 +1,48 @@
+name: Native builds and checks
+on:
+  push:
+    branches: [main]
+    paths: ['macos/**', 'windows/**', 'windows-tests/**', '.github/workflows/native.yml']
+  pull_request:
+    paths: ['macos/**', 'windows/**', 'windows-tests/**', '.github/workflows/native.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash macos/build.sh
+      - run: '"dist/Show Me The Money.app/Contents/MacOS/ShowMeTheMoney" --self-test'
+      - run: ditto -c -k --keepParent 'dist/Show Me The Money.app' dist/ShowMeTheMoney-Mac.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-beta
+          path: dist/ShowMeTheMoney-Mac.zip
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run --project windows-tests/CoreTests.csproj -c Release
+      - run: dotnet publish windows/ShowMeTheMoney.csproj -c Release -r win-x64 --self-contained false -o dist/windows
+      - run: dotnet publish windows/ShowMeTheMoney.csproj -c Release -r win-arm64 --self-contained false -o dist/windows-arm64
+      - name: Windows x64 startup smoke test
+        shell: pwsh
+        run: |
+          $result = Join-Path $env:TEMP 'ShowMeTheMoney-smoke/result.txt'
+          if (Test-Path $result) { Remove-Item $result }
+          $app = Start-Process ./dist/windows/ShowMeTheMoney.exe -ArgumentList '--smoke-test' -PassThru
+          if (-not $app.WaitForExit(20000)) { $app.Kill(); throw 'Startup timed out' }
+          if ($app.ExitCode -ne 0) { throw 'App failed to start' }
+          if (-not (Test-Path $result)) { throw 'No smoke result' }
+          if ((Get-Content $result -Raw) -notmatch '^SMOKE_OK') { throw 'Smoke test failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-beta
+          path: |
+            dist/windows/
+            dist/windows-arm64/

@@ -12,10 +12,10 @@ struct Holding: Codable {
         return number
     }
 
-    var isValid: Bool { averageCost > 0 && shares > 0 && averageCost <= 999_999_999_999 && shares <= 999_999_999_999 }
+    var isValid: Bool { averageCost >= Decimal(string: "0.00000001")! && shares >= Decimal(string: "0.00000001")! && averageCost <= 999_999_999_999 && shares <= 999_999_999_999 }
 
     func valuation(price: Double) -> (total: Decimal, profit: Decimal, percent: Decimal)? {
-        guard isValid, price.isFinite, price > 0, let current = Decimal(string: String(price)) else { return nil }
+        guard isValid, price.isFinite, price > 0, price <= 999_999_999_999, let current = Decimal(string: String(price)) else { return nil }
         let cost = averageCost * shares
         let total = current * shares
         return (total, total - cost, (current - averageCost) / averageCost * 100)

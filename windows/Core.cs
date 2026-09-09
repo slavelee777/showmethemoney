@@ -15,7 +15,7 @@ record Stock(string Symbol, string Name)
 }
 record Holding(decimal AverageCost, decimal Shares, bool ShowTotal)
 {
-    internal bool Valid => AverageCost > 0 && Shares > 0 && AverageCost <= 999999999999m && Shares <= 999999999999m;
+    internal bool Valid => AverageCost >= 0.00000001m && Shares >= 0.00000001m && decimal.Round(AverageCost, 8) == AverageCost && decimal.Round(Shares, 8) == Shares && AverageCost <= 999999999999m && Shares <= 999999999999m;
     internal (decimal Total, decimal Profit, decimal Percent) Value(decimal price)
     {
         if (!Valid || price <= 0 || price > 999999999999m) throw new InvalidDataException();
@@ -27,9 +27,9 @@ record Holding(decimal AverageCost, decimal Shares, bool ShowTotal)
         return Regex.IsMatch(value, @"^[0-9]{1,12}(\.[0-9]{1,8})?$") && decimal.TryParse(value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var n) && n > 0 && n <= 999999999999m ? n : null;
     }
 }
-record Quote(decimal Price, string Currency, DateTimeOffset Time, bool Naver, bool Open)
+record Quote(decimal Price, string Currency, DateTimeOffset Time, bool Naver, bool Open, bool SessionKnown = false)
 {
-    internal string Source => Naver ? Lang.T("네이버 · KRX · 7초 갱신", "Naver · KRX · 7s") : Lang.T("Yahoo · 15초 갱신 · 지연 가능", "Yahoo · 15s · May be delayed");
+    internal string Source => (SessionKnown && !Open ? Lang.T("장 종료 · 60초 갱신 · ", "Closed · 60s · ") : "") + (Naver ? Lang.T("네이버 · KRX", "Naver · KRX") : Lang.T("Yahoo · 지연 가능", "Yahoo · May be delayed"));
     internal string Formatted => Format.Money(Price, Currency);
 }
 static class Format
@@ -129,12 +129,24 @@ static class Market
     internal static string? Symbol(string? query)
     {
         var q = (query ?? "").Trim().ToUpperInvariant();
-        if (Regex.IsMatch(q, @"^[0-9]{6}$")) return q + ".KS";
+        if (Regex.IsMatch(q, @"^[0-9]{6}$")) return Catalog.FirstOrDefault(s => s.Symbol.StartsWith(q + ".", StringComparison.Ordinal))?.Symbol;
         return Regex.IsMatch(q, @"^[A-Z0-9^][A-Z0-9.^=-]{0,19}$") ? q : null;
     }
     internal static bool Korean(string symbol) => Regex.IsMatch(symbol, @"^[0-9]{6}\.(KS|KQ)$");
     internal static int Interval(string? symbol) => symbol is not null && Korean(symbol) ? 7000 : 15000;
     internal static List<Stock> Local(string q) => Catalog.Where(s => s.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || s.Symbol.Contains(q, StringComparison.OrdinalIgnoreCase) || EnglishNames.GetValueOrDefault(s.Symbol, "").Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+    internal static int PollDelay(string? symbol, Quote? quote, int failures)
+    {
+        if (failures > 0) return (int)Math.Min(300000, Math.Max(15000, Interval(symbol)) * Math.Pow(2, Math.Min(failures, 5)));
+        return quote is { SessionKnown: true, Open: false } ? 60000 : Interval(symbol);
+    }
+    internal static Stock ParseIdentity(JsonElement root, string code)
+    {
+        if (root.GetProperty("itemCode").GetString() != code) throw new InvalidDataException();
+        var exchange = root.GetProperty("stockExchangeType").GetProperty("code").GetString();
+        if (exchange is not ("KS" or "KQ")) throw new InvalidDataException("Unsupported exchange");
+        return new(code + "." + exchange, root.GetProperty("stockName").GetString() ?? code);
+    }
     static async Task<JsonDocument> Get(string url, CancellationToken token)
     {
         using var message = new HttpRequestMessage(HttpMethod.Get, url);
@@ -148,7 +160,13 @@ static class Market
         var meta = root.GetProperty("chart").GetProperty("result")[0].GetProperty("meta");
         var price = meta.GetProperty("regularMarketPrice").GetDecimal();
         ValidatePrice(price);
-        return new(price, meta.TryGetProperty("currency", out var c) ? c.GetString() ?? "" : "", DateTimeOffset.FromUnixTimeSeconds(meta.GetProperty("regularMarketTime").GetInt64()), false, false);
+        return new(price, meta.TryGetProperty("currency", out var c) ? c.GetString() ?? "" : "", DateTimeOffset.FromUnixTimeSeconds(meta.GetProperty("regularMarketTime").GetInt64()), false, TradingOpen(meta), meta.TryGetProperty("currentTradingPeriod", out var period) && period.TryGetProperty("regular", out _));
+    }
+    static bool TradingOpen(JsonElement meta)
+    {
+        if (!meta.TryGetProperty("currentTradingPeriod", out var periods) || !periods.TryGetProperty("regular", out var regular)) return false;
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        return regular.GetProperty("start").GetInt64() <= now && now < regular.GetProperty("end").GetInt64();
     }
     internal static Quote ParseNaver(JsonElement root, string code)
     {
@@ -156,7 +174,7 @@ static class Market
         var price = decimal.Parse(item.GetProperty("closePrice").GetString()!.Replace(",", ""), CultureInfo.InvariantCulture);
         ValidatePrice(price);
         var time = DateTimeOffset.Parse(item.GetProperty("localTradedAt").GetString()!, CultureInfo.InvariantCulture);
-        return new(price, "KRW", time, true, item.GetProperty("marketStatus").GetString() == "OPEN");
+        return new(price, "KRW", time, true, item.GetProperty("marketStatus").GetString() == "OPEN", true);
     }
     static void ValidatePrice(decimal price) { if (price <= 0 || price > 999999999999m) throw new InvalidDataException("Invalid quote"); }
     internal static async Task<Quote> Latest(string symbol, CancellationToken token)
@@ -171,6 +189,12 @@ static class Market
     }
     internal static async Task<List<Stock>> Search(string query, CancellationToken token)
     {
+        if (Regex.IsMatch(query.Trim(), @"^[0-9]{6}$"))
+        {
+            var code = query.Trim();
+            using var identity = await Get("https://m.stock.naver.com/api/stock/" + code + "/basic", token);
+            return [ParseIdentity(identity.RootElement, code)];
+        }
         using var json = await Get("https://query1.finance.yahoo.com/v1/finance/search?q=" + Uri.EscapeDataString(query) + "&quotesCount=8&newsCount=0", token);
         var stocks = new List<Stock>();
         foreach (var item in json.RootElement.GetProperty("quotes").EnumerateArray())
