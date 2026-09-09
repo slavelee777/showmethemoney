@@ -3,7 +3,7 @@
 작업하다가 주가 하나만 슬쩍 보고 싶어서 만들었습니다.
 Mac은 상단 메뉴바에, Windows는 작업표시줄 위 작은 창에 가격을 띄워줍니다. 무료입니다.
 
-[다운로드](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.0.0) · [소개 페이지](https://dlgudrms.github.io/showmethemoney/) · [커피 한 잔 사주기](https://buymeacoffee.com/hglee)
+[다운로드](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.0.1) · [소개 페이지](https://dlgudrms.github.io/showmethemoney/) · [커피 한 잔 사주기](https://buymeacoffee.com/hglee)
 
 ## 사용하기
 
@@ -20,7 +20,7 @@ Windows는 PC에 맞는 x64 또는 ARM64 파일을 받으세요. [.NET 10 Deskto
 
 국내 시세는 네이버 KRX, 해외 시세는 Yahoo를 사용합니다. 장중에는 각각 7초·15초마다 확인하고, 장 종료 시에는 간격을 늘립니다. 시세가 지연될 수 있으며, 수익률에는 수수료와 세금이 포함되지 않습니다.
 
-환산에는 Frankfurter의 일별 기준 환율을 사용하며, 한 시간 동안 캐시합니다. 환율 기준 날짜는 툴팁에서 확인할 수 있습니다. 수익률은 환차손익을 제외한 주가 변동 기준입니다.
+환산에는 Frankfurter의 일별 기준 환율을 사용하며, 한 시간 동안 캐시합니다. 시세 출처·시간과 환율 기준 날짜를 함께 표시합니다. 마지막 환율은 재시작 후에도 남아 있으며, 새로 확인하지 못한 환율에는 이전 환율 표시가 붙습니다. 수익률은 환차손익을 제외한 주가 변동 기준입니다.
 
 ## 직접 빌드하기
 
@@ -45,7 +45,7 @@ dotnet publish windows/ShowMeTheMoney.csproj -c Release -r win-x64 --self-contai
 I made this to keep an eye on one stock while working.
 It shows the price in the Mac menu bar or a small window above the Windows taskbar. It's free.
 
-[Download 1.0](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.0.0) · [Website](https://dlgudrms.github.io/showmethemoney/) · [Buy me a coffee](https://buymeacoffee.com/hglee)
+[Download 1.0.1](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.0.1) · [Website](https://dlgudrms.github.io/showmethemoney/) · [Buy me a coffee](https://buymeacoffee.com/hglee)
 
 Unzip, launch, search for a stock, and select it. Try `AAPL`, `Samsung`, or a Korean stock code such as `005930`.
 
@@ -57,6 +57,6 @@ Unzip, launch, search for a stock, and select it. Try `AAPL`, `Samsung`, or a Ko
 Mac requires macOS 13 or later and supports Intel and Apple Silicon.
 On Windows, choose x64 or ARM64 and install the matching [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
 
-Korean quotes come from Naver KRX; overseas quotes come from Yahoo. Quotes may be delayed. Currency conversion uses Frankfurter daily reference rates, cached for one hour. Returns reflect stock price changes and exclude FX gains, fees, and taxes.
+Korean quotes come from Naver KRX; overseas quotes come from Yahoo. Quotes may be delayed. Currency conversion uses Frankfurter daily reference rates, cached for one hour. The last successful rates are saved across restarts and labeled as cached until refreshed. Quote details and the FX date appear together. Returns reflect stock price changes and exclude FX gains, fees, and taxes.
 
 To build from source, use the commands above. The Mac app uses Swift/AppKit; Windows uses C#/WinForms. Found a bug? [Open an issue](https://github.com/dlgudrms/showmethemoney/issues).
