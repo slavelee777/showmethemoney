@@ -3,7 +3,7 @@
 작업하다가 주가 하나만 슬쩍 보고 싶어서 만들었습니다.
 Mac은 상단 메뉴바에, Windows는 작업표시줄 위 작은 창에 가격을 띄워줍니다. 무료입니다.
 
-[다운로드](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.1.2-beta.3) · [소개 페이지](https://dlgudrms.github.io/showmethemoney/) · [커피 한 잔 사주기](https://buymeacoffee.com/hglee)
+[다운로드](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.0.0) · [소개 페이지](https://dlgudrms.github.io/showmethemoney/) · [커피 한 잔 사주기](https://buymeacoffee.com/hglee)
 
 ## 사용하기
 
@@ -38,3 +38,25 @@ dotnet publish windows/ShowMeTheMoney.csproj -c Release -r win-x64 --self-contai
 
 소개 페이지는 `docs/`, 이전 Electron 초안은 `archive/electron-prototype/`에 있습니다.
 불편한 점이나 버그는 [Issues](https://github.com/dlgudrms/showmethemoney/issues)에 남겨주세요.
+
+
+## English
+
+I made this to keep an eye on one stock while working.
+It shows the price in the Mac menu bar or a small window above the Windows taskbar. It's free.
+
+[Download 1.0](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.0.0) · [Website](https://dlgudrms.github.io/showmethemoney/) · [Buy me a coffee](https://buymeacoffee.com/hglee)
+
+Unzip, launch, search for a stock, and select it. Try `AAPL`, `Samsung`, or a Korean stock code such as `005930`.
+
+- Show just the price, or include the stock symbol.
+- Enter your average cost and shares to see holding value and return.
+- Korean displays KRW (₩); English displays USD ($).
+- Enter average cost in the stock's trading currency, shown beside the input.
+
+Mac requires macOS 13 or later and supports Intel and Apple Silicon.
+On Windows, choose x64 or ARM64 and install the matching [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
+
+Korean quotes come from Naver KRX; overseas quotes come from Yahoo. Quotes may be delayed. Currency conversion uses Frankfurter daily reference rates, cached for one hour. Returns reflect stock price changes and exclude FX gains, fees, and taxes.
+
+To build from source, use the commands above. The Mac app uses Swift/AppKit; Windows uses C#/WinForms. Found a bug? [Open an issue](https://github.com/dlgudrms/showmethemoney/issues).
