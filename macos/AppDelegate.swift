@@ -230,12 +230,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
     }
     func updateHoldingLabels() {
         holdingTitle.stringValue = selected.map { "\(L("내 보유")) · \($0.displayName) (\($0.symbol))" } ?? L("종목을 먼저 선택하세요")
+        if let quote = lastQuote {
+            averageLabel.stringValue = AppLanguage.code == "ko" ? "평단 (입력: \(quote.currency))" : "Cost (input: \(quote.currency))"
+            return
+        }
         averageLabel.stringValue = selected.map { isKoreanStock($0.symbol) ? L("평균 매수가 (원)") : L("평균 매수가 (종목 통화)") } ?? L("평균 매수가")
     }
     func updateQuoteLabels() {
+        updateHoldingLabels()
         if let quote = lastQuote, let stock = selected {
             sourceLabel.stringValue = isKoreanStock(stock.symbol) ? "\(L("네이버 · KRX · 7초 갱신")) · \(L(quote.marketStatus))" : L("Yahoo · 15초 갱신 · 지연 가능")
-            if quote.sessionOpen == false { sourceLabel.stringValue = AppLanguage.code == "ko" ? "장 종료 · 60초 갱신" : "Closed · 60s refresh" }
+            if !quote.exchangeNote.isEmpty { sourceLabel.stringValue = quote.exchangeNote }
+            if quote.sessionOpen == false && quote.exchangeNote.isEmpty { sourceLabel.stringValue = AppLanguage.code == "ko" ? "장 종료 · 60초 갱신" : "Closed · 60s refresh" }
             if search.stringValue.isEmpty { note.stringValue = "\(stock.displayName) · \(quote.formatted)\n\(L("시세 기준")) \(quoteDate(quote.time))" }
         }
         if quoteFailed { note.stringValue = L("조회 실패 · 종목 코드와 인터넷 연결을 확인하세요") }
@@ -305,7 +311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         var price = lastQuote?.formatted ?? "—"
         if let holding = holdings[stock.symbol], holding.showTotal {
             if let quote = lastQuote, let result = holding.valuation(price: quote.price) {
-                price = "\(holdingMoney(result.total, currency: quote.currency)) (\(holdingPercent(result.percent)))"
+                price = "\(quote.money(result.total)) (\(holdingPercent(result.percent)))"
             } else { price = L("평가 —") }
         }
         let text = showSymbol ? "\(stock.symbol) \(price)" : price
@@ -314,8 +320,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
             let time = quoteDate(quote.time)
             var tip = "\(stock.displayName) (\(stock.symbol)) · \(L("현재가")) \(quote.formatted)\n\(L(quote.source)) · \(L("시세 기준")) \(time)"
             if let holding = holdings[stock.symbol], let result = holding.valuation(price: quote.price) {
-                tip += "\n\(L("평가금액")) \(holdingMoney(result.total, currency: quote.currency)) · \(L("손익")) \(holdingMoney(result.profit, currency: quote.currency)) (\(holdingPercent(result.percent)))\n\(L("수수료·세금 제외"))"
+                tip += "\n\(L("평가금액")) \(quote.money(result.total)) · \(L("손익")) \(quote.money(result.profit)) (\(holdingPercent(result.percent)))\n\(L("수수료·세금 제외"))"
             }
+            if !quote.exchangeNote.isEmpty { tip += "\n" + quote.exchangeNote }
             if quoteFailed { tip += L("\n⚠ 조회 실패 · 마지막 성공 시세") }
             status.button?.toolTip = tip
         }
@@ -383,7 +390,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         quoteTask = Task {
             defer { if !Task.isCancelled { quoteTask = nil; scheduleRefresh() } }
             do {
-                let quote = try await latestQuote(stock.symbol)
+                var quote = try await latestQuote(stock.symbol)
+                quote.exchange = await ExchangeCache.shared.latest()
                 try Task.checkCancellation()
                 lastQuote = quote
                 quoteFailed = false

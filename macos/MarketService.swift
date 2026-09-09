@@ -45,14 +45,22 @@ struct Quote {
     var source = "Yahoo · 지연 가능"
     var marketStatus = ""
     var sessionOpen: Bool? = nil
-    var formatted: String {
-        let formatter = NumberFormatter()
-        formatter.locale = AppLanguage.locale
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = currency == "KRW" ? 0 : 2
-        formatter.maximumFractionDigits = currency == "KRW" ? 0 : 2
-        let prefix = currency == "KRW" ? "₩" : currency == "USD" ? "$" : currency + " "
-        return prefix + (formatter.string(from: NSNumber(value: price)) ?? "—")
+    var exchange: ExchangeRates? = nil
+    var displayCurrency: String { AppLanguage.code == "ko" ? "KRW" : "USD" }
+    func money(_ amount: Decimal) -> String {
+        if currency == displayCurrency { return holdingMoney(amount, currency: displayCurrency) }
+        guard let converted = exchange?.convert(amount, from: currency, to: displayCurrency) else { return "—" }
+        return holdingMoney(converted, currency: displayCurrency)
+    }
+    var formatted: String { money(Decimal(string: String(price)) ?? 0) }
+    var exchangeNote: String {
+        if currency == displayCurrency { return "" }
+        guard let fx = exchange, fx.convert(1, from: currency, to: displayCurrency) != nil else {
+            return AppLanguage.code == "ko" ? "환율 확인 불가 · 환산 금액 표시 대기" : "Exchange rate unavailable · Converted value pending"
+        }
+        let label = AppLanguage.code == "ko" ? "참고 환율" : "Reference FX"
+        let old = fx.stale ? (AppLanguage.code == "ko" ? " · 갱신 실패, 이전 환율" : " · Update failed, cached rate") : ""
+        return "\(label) \(fx.date) · Frankfurter\(old)"
     }
     static func parse(_ json: [String: Any]) throws -> Quote {
         guard let chart = json["chart"] as? [String: Any],

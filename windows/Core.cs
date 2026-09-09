@@ -30,7 +30,17 @@ record Holding(decimal AverageCost, decimal Shares, bool ShowTotal)
 record Quote(decimal Price, string Currency, DateTimeOffset Time, bool Naver, bool Open, bool SessionKnown = false)
 {
     internal string Source => (SessionKnown && !Open ? Lang.T("장 종료 · 60초 갱신 · ", "Closed · 60s · ") : "") + (Naver ? Lang.T("네이버 · KRX", "Naver · KRX") : Lang.T("Yahoo · 지연 가능", "Yahoo · May be delayed"));
-    internal string Formatted => Format.Money(Price, Currency);
+    internal ExchangeRates? Exchange { get; init; }
+    internal string DisplayCurrency => Lang.Code == "ko" ? "KRW" : "USD";
+    internal string Money(decimal amount) {
+        if (Currency == DisplayCurrency) return Format.Money(amount, DisplayCurrency);
+        var converted = Exchange?.Convert(amount, Currency, DisplayCurrency);
+        return converted is decimal value ? Format.Money(value, DisplayCurrency) : "—";
+    }
+    internal string ExchangeNote => Currency == DisplayCurrency ? "" : Exchange?.Convert(1, Currency, DisplayCurrency) is null
+        ? Lang.T("환율 확인 불가 · 환산 금액 표시 대기", "Exchange rate unavailable · Converted value pending")
+        : Lang.T("참고 환율 ", "Reference FX ") + Exchange.Date + " · Frankfurter" + (Exchange.Stale ? Lang.T(" · 갱신 실패, 이전 환율", " · Update failed, cached rate") : "");
+    internal string Formatted => Money(Price);
 }
 static class Format
 {
@@ -43,7 +53,7 @@ static class Format
         if (settings.Holdings.TryGetValue(stock.Symbol, out var holding) && holding.ShowTotal)
         {
             if (quote is null) text = Lang.T("평가 —", "Value —");
-            else { var value = holding.Value(quote.Price); text = $"{Money(value.Total, quote.Currency)} ({Percent(value.Percent)})"; }
+            else { var value = holding.Value(quote.Price); text = $"{quote.Money(value.Total)} ({Percent(value.Percent)})"; }
         }
         return (settings.ShowSymbol ? stock.Symbol + " " : "") + text + (failed ? " ⚠" : "");
     }
@@ -54,11 +64,12 @@ static class Format
         if (quote is not null)
         {
             text += $"\n{Lang.T("현재가", "Price")} {quote.Formatted} · {quote.Source}\n{Lang.T("시세 기준", "As of")} {quote.Time.LocalDateTime.ToString("G", Lang.Culture)}";
+            if (quote.ExchangeNote.Length > 0) text += "\n" + quote.ExchangeNote;
             if (quote.Naver) text += " · " + (quote.Open ? Lang.T("장중", "Open") : Lang.T("장 마감/대기", "Closed/waiting"));
             if (settings.Holdings.TryGetValue(stock.Symbol, out var holding))
             {
                 var value = holding.Value(quote.Price);
-                text += $"\n{Lang.T("평가금액", "Value")} {Money(value.Total, quote.Currency)} · {Lang.T("손익", "P/L")} {Money(value.Profit, quote.Currency)} ({Percent(value.Percent)})\n{Lang.T("수수료·세금 제외", "Fees/taxes excluded")}";
+                text += $"\n{Lang.T("평가금액", "Value")} {quote.Money(value.Total)} · {Lang.T("손익", "P/L")} {quote.Money(value.Profit)} ({Percent(value.Percent)})\n{Lang.T("수수료·세금 제외", "Fees/taxes excluded")}";
             }
         }
         if (failed) text += "\n" + Lang.T("조회 실패 · 마지막 성공 시세", "Update failed · Last available quote");
@@ -205,5 +216,52 @@ static class Market
             stocks.Add(new(symbol, item.TryGetProperty("shortname", out var n) ? n.GetString() ?? symbol : symbol));
         }
         return stocks;
+    }
+}
+
+record ExchangeRates(Dictionary<string, decimal> Rates, string Date, bool Stale = false)
+{
+    internal decimal? Convert(decimal amount, string currency, string target) {
+        var minor = currency is "GBp" or "GBX";
+        var source = minor ? "GBP" : currency.ToUpperInvariant();
+        if (minor) amount /= 100;
+        if (source == target) return amount;
+        if (!Rates.TryGetValue(source, out var from) || !Rates.TryGetValue(target, out var to) || from <= 0 || to <= 0) return null;
+        try { return amount / from * to; } catch (OverflowException) { return null; }
+    }
+    internal static ExchangeRates Parse(JsonElement root) {
+        if (root.GetProperty("base").GetString() != "USD") throw new InvalidDataException();
+        var date = root.GetProperty("date").GetString() ?? "";
+        if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)) throw new InvalidDataException();
+        var rates = new Dictionary<string, decimal> { ["USD"] = 1 };
+        foreach (var item in root.GetProperty("rates").EnumerateObject()) {
+            var rate = item.Value.GetDecimal();
+            if (rate <= 0 || rate >= 1000000000) throw new InvalidDataException();
+            rates[item.Name] = rate;
+        }
+        if (!rates.ContainsKey("KRW")) throw new InvalidDataException();
+        return new(rates, date);
+    }
+}
+static class ExchangeCache
+{
+    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    static readonly SemaphoreSlim Gate = new(1, 1);
+    static ExchangeRates? cached;
+    static DateTimeOffset nextFetch;
+    internal static async Task<ExchangeRates?> Latest(CancellationToken token) {
+        await Gate.WaitAsync(token);
+        try {
+            if (DateTimeOffset.UtcNow < nextFetch) return cached;
+            try {
+                using var response = await Http.GetAsync("https://api.frankfurter.dev/v1/latest?base=USD", token);
+                response.EnsureSuccessStatusCode();
+                using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+                cached = ExchangeRates.Parse(json.RootElement);
+                nextFetch = DateTimeOffset.UtcNow.AddHours(1);
+            } catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+            catch { if (cached is not null) cached = cached with { Stale = true }; nextFetch = DateTimeOffset.UtcNow.AddMinutes(5); }
+            return cached;
+        } finally { Gate.Release(); }
     }
 }

@@ -145,7 +145,9 @@ sealed class SearchForm : Form
         var settings = state();
         quoteLabel.Text = settings.Selected is null ? T("종목을 검색하고 선택하세요", "Search and select a stock") : Format.Ticker(settings, quote, failed);
         tips.SetToolTip(quoteLabel, Format.Detail(settings, quote, failed));
+        if (quote is not null) averageLabel.Text = T("평단 (입력: ", "Cost (input: ") + quote.Currency + ")";
         sourceLabel.Text = quote is null ? T("국내: 네이버 KRX 7초 · 해외: Yahoo 15초", "KRX: Naver 7s · Other: Yahoo 15s") : quote.Source + "\n" + T("시세 기준 ", "As of ") + quote.Time.LocalDateTime.ToString("G", Culture);
+        if (quote is not null && quote.ExchangeNote.Length > 0) sourceLabel.Text = quote.ExchangeNote;
         if (failed) sourceLabel.Text = T("조회 실패 · 마지막 성공 시세", "Update failed · Last available quote") + (quote is null ? "" : "\n" + quote.Time.LocalDateTime.ToString("G", Culture));
     }
     void Fill(IEnumerable<Stock> stocks) { list.BeginUpdate(); list.Items.Clear(); foreach (var stock in stocks) list.Items.Add(stock); list.ClearSelected(); list.EndUpdate(); }
@@ -279,6 +281,7 @@ sealed class StockApp : ApplicationContext
         try
         {
             var result = await Market.Latest(stock.Symbol, source.Token);
+            result = result with { Exchange = await ExchangeCache.Latest(source.Token) };
             source.Token.ThrowIfCancellationRequested();
             if (exiting) return;
             quote = result; failed = false; failures = 0; Render();

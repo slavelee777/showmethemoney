@@ -1,6 +1,7 @@
 import Cocoa
 
 if CommandLine.arguments.contains("--self-test") {
+    AppLanguage.code = "en"
     precondition(directSymbol("005930") == "005930.KS")
     precondition(directSymbol("086520.kq") == "086520.KQ")
     precondition(directSymbol("<bad>") == nil)
@@ -52,6 +53,22 @@ if CommandLine.arguments.contains("--self-test") {
         let invalid: [String: Any] = ["chart": ["result": [["meta": ["regularMarketPrice": bad, "regularMarketTime": 1700000000.0]]]]]
         precondition((try? Quote.parse(invalid)) == nil)
     }
+    let fx = try ExchangeRates.parse(["base":"USD", "date":"2026-09-09", "rates":["KRW":1000, "EUR":0.8, "GBP":0.5]])
+    precondition(fx.convert(100, from: "USD", to: "KRW") == 100000)
+    precondition(fx.convert(100000, from: "KRW", to: "USD") == 100)
+    precondition(fx.convert(80, from: "EUR", to: "USD") == 100)
+    precondition(fx.convert(100, from: "GBp", to: "USD") == 2)
+    var converted = quote; converted.exchange = fx
+    AppLanguage.code = "ko"
+    precondition(converted.formatted == "₩123,450")
+    precondition(quote.formatted == "—" && quote.exchangeNote.contains("환율"))
+    precondition(naverQuote.formatted == "₩271,000")
+    var convertedKR = naverQuote; convertedKR.exchange = fx
+    AppLanguage.code = "en"
+    precondition(convertedKR.formatted == "$271.00")
+    precondition(convertedKR.money(2700000) == "$2,700.00")
+    precondition(fx.convert(1, from: "UNKNOWN", to: "USD") == nil)
+    precondition((try? ExchangeRates.parse(["base":"USD", "date":"2026-09-09", "rates":["KRW":0]])) == nil)
     print("PASS: symbol normalization, Korean search, quote parsing, missing-data rejection")
 } else {
     MainActor.assumeIsolated {
