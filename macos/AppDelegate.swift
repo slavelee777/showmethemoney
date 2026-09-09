@@ -1,7 +1,7 @@
 import Cocoa
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate, NSTableViewDataSource, NSTableViewDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate, NSTableViewDataSource, NSTableViewDelegate, NSPopoverDelegate {
     let status: NSStatusItem = {
         let name = "StockPrice"
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         return item
     }()
     let popover = NSPopover()
+    var outsideLocal: Any?
+    var outsideGlobal: Any?
     let search = NSSearchField(frame: NSRect(x: 14, y: 283, width: 302, height: 28))
     let table = NSTableView()
     let note = NSTextField(labelWithString: L("종목을 검색하고 선택하세요"))
@@ -182,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         vc.view.addSubview(languageMenu)
         popover.contentViewController = vc
         popover.behavior = .transient
+        popover.delegate = self
         applyLanguage()
         if CommandLine.arguments.contains("--smoke-test") {
             vc.view.appearance = NSAppearance(named: .aqua)
@@ -193,9 +196,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         guard let button = status.button else { return }
         if popover.isShown { popover.performClose(nil); return }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        watchOutsideClicks()
         NSApp.activate(ignoringOtherApps: true)
         search.window?.makeFirstResponder(search)
     }
+    func watchOutsideClicks() {
+        stopWatchingOutsideClicks()
+        outsideGlobal = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            MainActor.assumeIsolated { self?.popover.performClose(nil) }
+        }
+        outsideLocal = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self, self.popover.isShown, let window = event.window else { return }
+                // A popup menu belongs to this process but sits outside the popover window.
+                if window !== self.popover.contentViewController?.view.window,
+                   window !== self.status.button?.window,
+                   window.level.rawValue < NSWindow.Level.popUpMenu.rawValue {
+                    self.popover.performClose(nil)
+                }
+            }
+            return event
+        }
+    }
+    func stopWatchingOutsideClicks() {
+        if let monitor = outsideLocal { NSEvent.removeMonitor(monitor) }
+        if let monitor = outsideGlobal { NSEvent.removeMonitor(monitor) }
+        outsideLocal = nil; outsideGlobal = nil
+    }
+    func popoverDidClose(_ notification: Notification) { stopWatchingOutsideClicks(); searchTask?.cancel() }
+    func applicationWillTerminate(_ notification: Notification) { stopWatchingOutsideClicks() }
     @objc func quitApp() { NSApp.terminate(nil) }
     @objc func changeLanguage() {
         AppLanguage.code = languageMenu.indexOfSelectedItem == 0 ? "ko" : "en"

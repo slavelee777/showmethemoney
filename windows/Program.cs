@@ -85,9 +85,20 @@ sealed class SearchForm : Form
             var next = state().Copy(); next.Language = language.SelectedIndex == 0 ? "ko" : "en";
             if (!commit(next)) ApplyLanguage();
         };
+        Deactivate += (_, _) => DismissIfInactive();
+        language.DropDownClosed += (_, _) => DismissIfInactive();
+        KeyPreview = true;
+        KeyDown += (_, e) => { if (e.KeyCode == Keys.Escape) { Hide(); e.Handled = true; } };
         FormClosing += (_, e) => { if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); } };
         VisibleChanged += (_, _) => { if (!Visible) pending?.Cancel(); };
         Fill(Market.Local("")); LoadHolding(); ApplyLanguage();
+    }
+    void DismissIfInactive()
+    {
+        if (!IsHandleCreated || IsDisposed) return;
+        BeginInvoke(new Action(() => {
+            if (!IsDisposed && Visible && !language.DroppedDown && ActiveForm != this) Hide();
+        }));
     }
     void SetChecked(CheckBox checkbox, bool value) { binding = true; checkbox.Checked = value; binding = false; }
     public void Error(string text) { message.ForeColor = Color.Firebrick; message.Text = text; }
