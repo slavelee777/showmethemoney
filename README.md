@@ -1,8 +1,8 @@
 # Show Me The Money
 
-[소개 페이지](https://dlgudrms.github.io/showmethemoney/) · [앱 다운로드](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.1.0-beta.1) · [개발자 후원](https://buymeacoffee.com/hglee)
+[소개 페이지](https://dlgudrms.github.io/showmethemoney/) · [앱 다운로드](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.1.1-beta.2) · [개발자 후원](https://buymeacoffee.com/hglee)
 
-무료 베타입니다. Mac은 Apple Silicon용이며 배포용 공증 전입니다. Windows는 x64/ARM64 빌드이며 실제 Windows 기기 UI 검증 전입니다.
+무료 베타입니다. Mac은 Apple Silicon/Intel 범용 빌드이며 배포용 공증 전입니다. Windows는 x64/ARM64 빌드이며 실제 Windows 기기 UI 검증 전입니다.
 
 **아이콘 클릭 → 주식 검색 → 선택 → 현재가 표시.** 한 종목의 가격만 보는 네이티브 앱입니다.
 
@@ -17,7 +17,7 @@ bash macos/build.sh
 open "dist/Show Me The Money.app"
 ```
 
-빌드에는 Xcode Command Line Tools가 필요합니다. 실행에는 별도 런타임 설치가 필요 없습니다. 현재 Mac의 CPU 아키텍처로 빌드됩니다. 배포용 공증은 하지 않았습니다.
+빌드에는 Xcode Command Line Tools가 필요합니다. 실행에는 별도 런타임 설치가 필요 없습니다. Apple Silicon과 Intel용 범용 바이너리로 빌드됩니다. 배포용 공증은 하지 않았습니다.
 
 ## Windows
 
@@ -32,7 +32,7 @@ dotnet publish windows/ShowMeTheMoney.csproj -c Release -r win-x64 --self-contai
 ## 사용
 
 - `삼성전자`, `엔비디아`, `AAPL` 등으로 검색합니다. 자주 쓰는 한국어 이름 14개는 내장 검색, 나머지는 온라인 검색을 사용합니다. 모든 한국어 종목명이 검색되는 것은 아니며 실패 시 코드를 입력하세요.
-- 국내 코스피는 `005930` 또는 `005930.KS`, 코스닥은 `086520.KQ`처럼 입력합니다.
+- 국내 주식은 `005930`, `086520`처럼 숫자로 검색하면 제공처의 거래소 정보로 코스피/코스닥을 구분합니다. 오프라인에서는 내장 종목 또는 `.KS`/`.KQ`를 명시한 코드를 사용하세요.
 - 한 종목만 저장합니다. Mac은 국내 종목을 네이버 KRX 시세로 7초마다, 해외 종목을 Yahoo 시세로 15초마다 조회합니다. Windows도 같은 제공처와 주기로 조회합니다. 검색은 입력 후 350ms 대기하여 요청 횟수를 줄입니다.
 - Mac 메뉴 막대나 Windows 가격창/트레이 아이콘을 클릭한 뒤 **가격에 추가 표시**에서 `종목 코드`를 체크하거나 해제할 수 있습니다. 해제하면 가격만 표시합니다. 메뉴 막대에는 아이콘을 표시하지 않습니다. 즉시 반영되며 다음 실행에도 유지됩니다. 가격만 표시해도 마우스를 올리면 종목명과 코드를 확인할 수 있습니다.
 - 창 하단에서 **한국어 / English**를 선택할 수 있습니다. 첫 실행은 시스템 언어를 따르고, 직접 선택한 언어는 저장됩니다. 언어 변경 시 평단·수량 입력과 보유 정보는 유지되며 화면·툴팁·오류 안내에 즉시 반영됩니다. 내장 종목은 한국어·영어 이름 모두 검색할 수 있습니다. 외부 제공처의 종목명은 원문으로 표시될 수 있습니다.
@@ -68,3 +68,12 @@ Windows 코어 검증: `dotnet run --project windows-tests/CoreTests.csproj -c R
 - `archive/electron-prototype/`: 이전 Electron 초안
 
 설치 의존성, 빌드 캐시, 개인 설정은 포함하지 않습니다.
+
+## 안정성 개선 (1.1.1 Beta 2)
+
+- 장중 국내 7초/해외 15초, 장 종료가 제공처에서 확인되면 60초. 요청 완료 후 다음 조회를 예약합니다.
+- 연속 실패 시 30 → 60 → 120 → 240 → 300초로 재시도를 늦추고, 성공하면 정상 주기로 복귀합니다. 종목을 바꾸면 즉시 조회합니다.
+- Yahoo 정규장 시간 정보가 없으면 시장 상태를 추측하지 않고 기본 조회 주기를 사용합니다. 프리/애프터마켓 가격은 아직 지원하지 않습니다.
+- Mac의 비공개 위치 설정을 제거했습니다. 기존 사용자가 저장한 메뉴바 위치는 유지됩니다. 시세/검색 코드는 `MarketService.swift`, UI는 `AppDelegate.swift`로 분리했습니다.
+- GitHub Actions에서 macOS 범용 빌드/코어 검증 및 Windows x64/ARM64 빌드/시작 검사를 수행합니다. 시작 검사는 DPI·다중 모니터 수동 QA를 대신하지 않습니다.
+- Mac Developer ID 서명·공증, Windows 코드서명은 아직 없습니다. Windows는 가벼운 framework-dependent 배포를 유지합니다.
