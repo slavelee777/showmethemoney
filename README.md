@@ -1,11 +1,19 @@
 # Show Me The Money
 
+맥 메뉴바·윈도우 작업표시줄에서 주가를 확인하는 가벼운 무료 앱.
+A free, lightweight stock ticker for the macOS menu bar and Windows taskbar.
+
 [![GitHub release downloads](https://img.shields.io/github/downloads/dlgudrms/showmethemoney/total?label=downloads&color=c1f76c&labelColor=192219)](https://github.com/dlgudrms/showmethemoney/releases "All release downloads / 전체 릴리스 다운로드 횟수")
 
 작업하다가 주가 하나만 슬쩍 보고 싶어서 만들었습니다.
 Mac은 상단 메뉴바에, Windows는 작업표시줄 위 작은 창에 가격을 띄워줍니다. 무료입니다.
 
 [다운로드](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.0.1) · [소개 페이지](https://dlgudrms.github.io/showmethemoney/) · [커피 한 잔 사주기](https://buymeacoffee.com/hglee)
+
+<img src="docs/media/mac-demo.gif" width="460" alt="Mac 주식 앱 사용 예시: 종목 검색 후 선택한 주가 확인 / Search for a stock and check its price" />
+
+Mac 앱 UI로 만든 10초 사용 예시입니다. 가격은 예시 데이터입니다.
+10-second demo rendered with the Mac app UI. Prices are sample data.
 
 ## 사용하기
 
