@@ -3,7 +3,7 @@ import {useState} from 'react';
 export default function Home(){
  const [en,setEn]=useState(false);const t=(ko:string,enText:string)=>en?enText:ko;
  return <div className="page" lang={en?'en':'ko'}>
- <header><a className="brand" href="#"><img src="/app-icon.png" width="36" height="36" alt=""/>Show Me The Money</a><button className="language" onClick={()=>setEn(!en)} aria-label={t('Switch to English','한국어로 전환')}>{en?'한국어':'English'} ↗</button></header>
+ <header><a className="brand" href="#"><img src="/app-icon.png" width="36" height="36" alt=""/>Show Me The Money</a><nav className="header-links" aria-label="Links"><a className="github-badge" href="https://github.com/dlgudrms/showmethemoney" target="_blank" rel="noopener noreferrer">GitHub ↗</a><button className="language" onClick={()=>setEn(!en)} aria-label={t('Switch to English','한국어로 전환')}>{en?'한국어':'English'} ↗</button></nav></header>
  <main><div className="eyebrow"><span/> {t('무료 데스크톱 앱 · 베타','FREE DESKTOP APP · BETA')}</div>
  <h1>{t('주가만,','Your stock.')}<br/><em>{t('가볍게.','At a glance.')}</em></h1>
  <p className="intro">{t('차트를 열지 않아도 괜찮아요.','No need to keep a chart open.')}<br/>{t('일하는 화면 한쪽에서, 내 주식을 확인하세요.','Keep your stock in sight while you work.')}</p>
