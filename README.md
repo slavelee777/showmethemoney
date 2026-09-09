@@ -6,7 +6,7 @@
 
 **아이콘 클릭 → 주식 검색 → 선택 → 현재가 표시.** 한 종목의 가격만 보는 네이티브 앱입니다.
 
-최종 앱은 `macos/`와 `windows/` 소스만 사용합니다. Electron, 브라우저 엔진, Node.js, 외부 패키지를 사용하지 않습니다. 이전 Electron 초안은 로컬에만 보존되며 이 저장소와 네이티브 빌드에는 포함되지 않습니다.
+최종 앱은 `macos/`와 `windows/` 소스만 사용합니다. Electron, 브라우저 엔진, Node.js, 외부 패키지를 사용하지 않습니다. 이전 Electron 초안은 `archive/electron-prototype/`에 보존하며 네이티브 빌드에는 포함되지 않습니다.
 
 ## Mac
 
@@ -58,3 +58,13 @@ Windows의 실제 트레이/가격창 배치는 Windows 환경에서 확인해�
 Windows 코어 검증: `dotnet run --project windows-tests/CoreTests.csproj -c Release`. `-- --live`를 추가하면 국내 실제 시세도 확인합니다. 실행 안내는 `windows/TESTING.txt`를 참고하세요.
 
 현재 개발자 후원 링크: https://buymeacoffee.com/hglee (Mac 및 Windows에 설정됨).
+
+## 소스 구성
+
+- `macos/`: Swift/AppKit 앱 전체 소스
+- `windows/`, `windows-tests/`: C#/WinForms 앱 및 코어 검증
+- `docs/`: GitHub Pages 정적 소개 페이지
+- `web-source/`: React 소개 페이지 원본 (npm ci, npm run dev)
+- `archive/electron-prototype/`: 이전 Electron 초안
+
+설치 의존성, 빌드 캐시, 개인 설정은 포함하지 않습니다.

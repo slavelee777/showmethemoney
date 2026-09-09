@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'"><title>Show Me The Money</title><link rel="stylesheet" href="style.css"></head>
+<body><main>
+  <header><div><span class="eyebrow">YOUR LITTLE MARKET WINDOW</span><h1>Show me the money<span class="dot">.</span></h1></div><span class="logo">↗</span></header>
+  <section class="hero"><div class="hero-top"><span id="selected-symbol">—</span><span class="badge">대표 종목</span></div><div id="selected-price">—</div><div id="selected-change">시세 불러오는 중</div><div id="quote-time" class="muted"></div></section>
+  <div class="section-heading"><h2>관심 종목</h2><button id="refresh" class="text-button">↻ 새로고침</button></div>
+  <div id="quotes" aria-live="polite"></div>
+  <form id="add-form"><label class="sr-only" for="symbol">추가할 종목 코드</label><input id="symbol" maxlength="20" placeholder="AAPL 또는 005930.KS" autocomplete="off" required><button type="submit" class="add-button">+ 추가</button></form>
+  <p class="hint">국내 코스피 .KS · 코스닥 .KQ · 미국 티커 그대로<br>예: 삼성전자 005930.KS · 에코프로 086520.KQ</p>
+  <p id="error" role="alert"></p>
+  <section class="settings"><label for="interval">자동 새로고침</label><select id="interval"><option value="30">30초마다</option><option value="60">1분마다</option><option value="120">2분마다</option><option value="300">5분마다</option></select><label for="widget">작은 가격창 항상 표시</label><input type="checkbox" id="widget"></section>
+  <footer><span>Yahoo Finance · 지연될 수 있는 시세</span><button id="quit" class="text-button">앱 종료</button></footer>
+</main><script src="renderer.js"></script></body></html>

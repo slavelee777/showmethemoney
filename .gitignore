@@ -8,8 +8,8 @@ windows-tests/bin/
 windows-tests/obj/
 
 website/
-src/
-test/
-package.json
-package-lock.json
+/src/
+/test/
+/package.json
+/package-lock.json
 LAUNCH.md

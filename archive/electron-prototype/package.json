@@ -1,0 +1,24 @@
+{
+  "name": "show-me-the-money",
+  "version": "1.0.0",
+  "private": true,
+  "description": "한국·미국 주식을 메뉴 막대에서 확인하는 데스크톱 앱",
+  "author": "Show Me The Money",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "pack": "electron-builder --dir",
+    "build:mac": "electron-builder --mac dmg",
+    "build:win": "electron-builder --win nsis"
+  },
+  "devDependencies": { "electron": "44.3.0", "electron-builder": "26.0.12" },
+  "build": {
+    "appId": "com.showmethemoney.desktop",
+    "productName": "Show Me The Money",
+    "files": ["src/**/*", "package.json"],
+    "mac": { "category": "public.app-category.finance", "target": ["dmg"] },
+    "win": { "target": ["nsis"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}
