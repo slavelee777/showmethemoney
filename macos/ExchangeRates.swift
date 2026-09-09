@@ -26,9 +26,27 @@ struct ExchangeRates {
         return ExchangeRates(rates: rates, date: date)
     }
 }
+enum ExchangeStore {
+    static let file = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("ShowMeTheMoney/exchange-rates.json")
+    static func load(from url: URL = file) -> ExchangeRates? {
+        guard let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var rates = try? ExchangeRates.parse(json) else { return nil }
+        rates.stale = true
+        return rates
+    }
+    static func save(_ rates: ExchangeRates, to url: URL = file) throws {
+        let json: [String: Any] = ["base": "USD", "date": rates.date,
+            "rates": rates.rates.mapValues { NSDecimalNumber(decimal: $0) }]
+        let data = try JSONSerialization.data(withJSONObject: json)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: .atomic)
+    }
+}
 actor ExchangeCache {
     static let shared = ExchangeCache()
-    var cached: ExchangeRates?
+    var cached: ExchangeRates? = ExchangeStore.load()
     var nextFetch = Date.distantPast
     func latest() async -> ExchangeRates? {
         if Date() < nextFetch { return cached }
@@ -37,6 +55,7 @@ actor ExchangeCache {
         do {
             let json = try await request("/v1/latest", query: [URLQueryItem(name: "base", value: "USD")], host: "https://api.frankfurter.dev")
             cached = try ExchangeRates.parse(json)
+            if let cached { try? ExchangeStore.save(cached) }
             nextFetch = Date().addingTimeInterval(3600)
         } catch { if Task.isCancelled { nextFetch = .distantPast } else { cached?.stale = true } }
         return cached

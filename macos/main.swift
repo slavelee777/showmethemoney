@@ -69,6 +69,18 @@ if CommandLine.arguments.contains("--self-test") {
     precondition(convertedKR.money(2700000) == "$2,700.00")
     precondition(fx.convert(1, from: "UNKNOWN", to: "USD") == nil)
     precondition((try? ExchangeRates.parse(["base":"USD", "date":"2026-09-09", "rates":["KRW":0]])) == nil)
+    let fxFolder = FileManager.default.temporaryDirectory.appendingPathComponent("smtm-fx-" + UUID().uuidString)
+    let fxFile = fxFolder.appendingPathComponent("rates.json")
+    try ExchangeStore.save(fx, to: fxFile)
+    let restoredFX = ExchangeStore.load(from: fxFile)
+    precondition(restoredFX?.stale == true && restoredFX?.date == fx.date)
+    precondition(restoredFX?.convert(100, from: "USD", to: "KRW") == 100000)
+    try Data("broken".utf8).write(to: fxFile)
+    precondition(ExchangeStore.load(from: fxFile) == nil)
+    try FileManager.default.removeItem(at: fxFolder)
+    let summary = convertedKR.sourceSummary(symbol: "005930.KS", failures: 0)
+    precondition(summary.contains("Naver") && summary.contains("7s") && summary.contains("Reference FX") && summary.contains("\n"))
+    precondition(convertedKR.sourceSummary(symbol: "005930.KS", failures: 2).contains("60s"))
     print("PASS: symbol normalization, Korean search, quote parsing, missing-data rejection")
 } else {
     MainActor.assumeIsolated {

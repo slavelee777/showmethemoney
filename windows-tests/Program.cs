@@ -100,3 +100,19 @@ Check(ExchangeRates.Parse(fxJson.RootElement).Convert(80,"EUR","USD")==100, "FX 
 using var badFx = JsonDocument.Parse("""{"base":"USD","date":"2026-09-09","rates":{"KRW":0}}""");
 Reject(()=>ExchangeRates.Parse(badFx.RootElement),"zero FX rejected");
 Console.WriteLine($"PASS: {count} total checks including FX");
+var fxPath = Path.Combine(Path.GetTempPath(), "smtm-fx-" + Guid.NewGuid().ToString("N"), "rates.json");
+try {
+    ExchangeStore.Save(fx, fxPath);
+    var restoredFx = ExchangeStore.Load(fxPath);
+    Check(restoredFx is { Stale: true } && restoredFx.Date == fx.Date && restoredFx.Convert(100,"USD","KRW") == 100000, "FX survives restart and is marked cached");
+    File.WriteAllText(fxPath, "broken");
+    Check(ExchangeStore.Load(fxPath) is null, "corrupt persisted FX ignored");
+    File.WriteAllText(fxPath, """{"base":"USD","date":"2026-09-09","rates":{"KRW":0}}""");
+    Check(ExchangeStore.Load(fxPath) is null, "invalid persisted rates rejected");
+} finally { if (Directory.Exists(Path.GetDirectoryName(fxPath))) Directory.Delete(Path.GetDirectoryName(fxPath)!,true); }
+Lang.Code="en";
+var summary = kr.SourceSummary("005930.KS",0);
+Check(summary.Contains("Naver") && summary.Contains("7s") && summary.Contains("Reference FX") && summary.Contains("\n"), "quote and FX both visible");
+Check(kr.SourceSummary("005930.KS",2).Contains("60s") && kr.SourceSummary("005930.KS",2).Contains("Reference FX"), "quote failure retains FX and shows retry interval");
+Check((kr with { Open=false }).SourceSummary("005930.KS",0).Contains("60s"), "closed interval displayed");
+Console.WriteLine($"PASS: {count} total checks including persistent FX and source summary");

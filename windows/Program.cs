@@ -28,6 +28,7 @@ sealed class SearchForm : Form
     bool binding;
     Quote? lastQuote;
     bool failed;
+    int quoteFailures;
 
     public SearchForm(Func<Settings> state, Func<Settings, bool> commit, Func<Stock, bool> choose, Action exit)
     {
@@ -35,12 +36,12 @@ sealed class SearchForm : Form
         donation = Donation.Read(AppContext.BaseDirectory);
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10);
-        ClientSize = new Size(420, 610);
+        ClientSize = new Size(420, 640);
         FormBorderStyle = FormBorderStyle.FixedToolWindow;
         ShowInTaskbar = false; TopMost = true;
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 10 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (var height in new float[] { 34, -1, 44, 28, 24, 66, 28, 34, 34, 36 })
+        foreach (var height in new float[] { 34, -1, 44, 28, 24, 66, 28, 34, 64, 36 })
             root.RowStyles.Add(new RowStyle(height < 0 ? SizeType.Percent : SizeType.Absolute, height < 0 ? 100 : height));
         root.Controls.Add(search, 0, 0); root.Controls.Add(list, 0, 1); root.Controls.Add(quoteLabel, 0, 2);
         root.Controls.Add(symbol, 0, 3); root.Controls.Add(holdingTitle, 0, 4);
@@ -150,16 +151,18 @@ sealed class SearchForm : Form
         UpdateQuote(lastQuote, failed);
         binding = false;
     }
-    public void UpdateQuote(Quote? quote, bool failed)
+    public void UpdateQuote(Quote? quote, bool failed, int? failures = null)
     {
         lastQuote = quote; this.failed = failed;
+        if (failures.HasValue) quoteFailures = failures.Value;
         var settings = state();
         quoteLabel.Text = settings.Selected is null ? T("종목을 검색하고 선택하세요", "Search and select a stock") : Format.Ticker(settings, quote, failed);
         tips.SetToolTip(quoteLabel, Format.Detail(settings, quote, failed));
         if (quote is not null) averageLabel.Text = T("평단 (입력: ", "Cost (input: ") + quote.Currency + ")";
-        sourceLabel.Text = quote is null ? T("국내: 네이버 KRX 7초 · 해외: Yahoo 15초", "KRX: Naver 7s · Other: Yahoo 15s") : quote.Source + "\n" + T("시세 기준 ", "As of ") + quote.Time.LocalDateTime.ToString("G", Culture);
-        if (quote is not null && quote.ExchangeNote.Length > 0) sourceLabel.Text = quote.ExchangeNote;
-        if (failed) sourceLabel.Text = T("조회 실패 · 마지막 성공 시세", "Update failed · Last available quote") + (quote is null ? "" : "\n" + quote.Time.LocalDateTime.ToString("G", Culture));
+        sourceLabel.Text = quote is null
+            ? (failed ? T("조회 실패 · 시세 대기", "Update failed · Waiting for quote") : T("국내: 네이버 KRX 7초 · 해외: Yahoo 15초", "KRX: Naver 7s · Other: Yahoo 15s"))
+            : quote.SourceSummary(settings.Selected?.Symbol ?? "", quoteFailures);
+        tips.SetToolTip(sourceLabel, sourceLabel.Text);
     }
     void Fill(IEnumerable<Stock> stocks) { list.BeginUpdate(); list.Items.Clear(); foreach (var stock in stocks) list.Items.Add(stock); list.ClearSelected(); list.EndUpdate(); }
     void SelectStock() { if (list.SelectedItem is Stock stock && choose(stock)) { pending?.Cancel(); Hide(); } }
@@ -279,7 +282,7 @@ sealed class StockApp : ApplicationContext
         var detail = Format.Detail(settings, quote, failed);
         tray.Text = detail.Length > 127 ? detail[..127] : detail;
         tooltip.SetToolTip(price, detail);
-        search.UpdateQuote(quote, failed);
+        search.UpdateQuote(quote, failed, failures);
         var area = Screen.FromControl(ticker).WorkingArea;
         ticker.Width = Math.Min(Math.Max(1, area.Width - 8), Math.Max(160, TextRenderer.MeasureText(price.Text, price.Font).Width + 28));
         ticker.Location = new Point(Math.Max(area.Left, area.Right - ticker.Width - 4), Math.Max(area.Top, area.Bottom - ticker.Height - 4));

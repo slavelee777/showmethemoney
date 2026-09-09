@@ -154,9 +154,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         note.maximumNumberOfLines = 2
         note.lineBreakMode = .byTruncatingTail
         vc.view.addSubview(note)
-        sourceLabel.font = .systemFont(ofSize: 9)
+        sourceLabel.font = .systemFont(ofSize: 10)
         sourceLabel.textColor = .tertiaryLabelColor
-        sourceLabel.frame = NSRect(x: 14, y: 11, width: 250, height: 14)
+        sourceLabel.frame = NSRect(x: 14, y: 11, width: 302, height: 50)
+        sourceLabel.maximumNumberOfLines = 3
+        sourceLabel.lineBreakMode = .byWordWrapping
         vc.view.addSubview(sourceLabel)
         let quit = quitButton
         quit.target = self
@@ -164,6 +166,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         quit.bezelStyle = .inline
         quit.frame = NSRect(x: 275, y: 8, width: 42, height: 20)
         vc.view.addSubview(quit)
+        for view in vc.view.subviews where view !== sourceLabel { view.frame.origin.y += 36 }
+        vc.view.frame.size.height += 36
         // Keep support links in a separate footer, away from price settings.
         for view in vc.view.subviews { view.frame.origin.y += 30 }
         vc.view.frame.size.height += 30
@@ -268,9 +272,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
     func updateQuoteLabels() {
         updateHoldingLabels()
         if let quote = lastQuote, let stock = selected {
-            sourceLabel.stringValue = isKoreanStock(stock.symbol) ? "\(L("네이버 · KRX · 7초 갱신")) · \(L(quote.marketStatus))" : L("Yahoo · 15초 갱신 · 지연 가능")
-            if !quote.exchangeNote.isEmpty { sourceLabel.stringValue = quote.exchangeNote }
-            if quote.sessionOpen == false && quote.exchangeNote.isEmpty { sourceLabel.stringValue = AppLanguage.code == "ko" ? "장 종료 · 60초 갱신" : "Closed · 60s refresh" }
+            sourceLabel.stringValue = quote.sourceSummary(symbol: stock.symbol, failures: failures)
+            sourceLabel.toolTip = sourceLabel.stringValue
             if search.stringValue.isEmpty { note.stringValue = "\(stock.displayName) · \(quote.formatted)\n\(L("시세 기준")) \(quoteDate(quote.time))" }
         }
         if quoteFailed { note.stringValue = L("조회 실패 · 종목 코드와 인터넷 연결을 확인하세요") }
@@ -433,6 +436,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
                 failures = min(failures + 1, 5)
                 renderStatus()
                 status.button?.toolTip = L("조회 실패 · 표시된 가격은 마지막 성공 시세입니다")
+                updateQuoteLabels()
                 note.stringValue = L("조회 실패 · 종목 코드와 인터넷 연결을 확인하세요")
             }
         }

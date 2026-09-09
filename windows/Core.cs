@@ -40,6 +40,11 @@ record Quote(decimal Price, string Currency, DateTimeOffset Time, bool Naver, bo
     internal string ExchangeNote => Currency == DisplayCurrency ? "" : Exchange?.Convert(1, Currency, DisplayCurrency) is null
         ? Lang.T("환율 확인 불가 · 환산 금액 표시 대기", "Exchange rate unavailable · Converted value pending")
         : Lang.T("참고 환율 ", "Reference FX ") + Exchange.Date + " · Frankfurter" + (Exchange.Stale ? Lang.T(" · 갱신 실패, 이전 환율", " · Update failed, cached rate") : "");
+    internal string SourceSummary(string symbol, int failures) {
+        var first = (failures > 0 ? "⚠ " : "") + (Naver ? "Naver · KRX" : "Yahoo") + " · "
+            + (Market.PollDelay(symbol, this, failures) / 1000) + Lang.T("초", "s") + " · " + Time.LocalDateTime.ToString("MM/dd HH:mm", Lang.Culture);
+        return first + (ExchangeNote.Length == 0 ? "" : "\n" + ExchangeNote);
+    }
     internal string Formatted => Money(Price);
 }
 static class Format
@@ -243,11 +248,25 @@ record ExchangeRates(Dictionary<string, decimal> Rates, string Date, bool Stale 
         return new(rates, date);
     }
 }
+static class ExchangeStore
+{
+    internal static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ShowMeTheMoney", "exchange-rates.json");
+    internal static ExchangeRates? Load(string? path = null) {
+        try { using var json = JsonDocument.Parse(File.ReadAllText(path ?? FilePath)); return ExchangeRates.Parse(json.RootElement) with { Stale = true }; }
+        catch { return null; }
+    }
+    internal static void Save(ExchangeRates rates, string? path = null) {
+        path ??= FilePath;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path + ".tmp", JsonSerializer.Serialize(new { @base = "USD", date = rates.Date, rates = rates.Rates }));
+        File.Move(path + ".tmp", path, true);
+    }
+}
 static class ExchangeCache
 {
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
     static readonly SemaphoreSlim Gate = new(1, 1);
-    static ExchangeRates? cached;
+    static ExchangeRates? cached = ExchangeStore.Load();
     static DateTimeOffset nextFetch;
     internal static async Task<ExchangeRates?> Latest(CancellationToken token) {
         await Gate.WaitAsync(token);
@@ -258,6 +277,7 @@ static class ExchangeCache
                 response.EnsureSuccessStatusCode();
                 using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
                 cached = ExchangeRates.Parse(json.RootElement);
+                try { ExchangeStore.Save(cached); } catch { /* Disk cache is optional; retain the valid in-memory result. */ }
                 nextFetch = DateTimeOffset.UtcNow.AddHours(1);
             } catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
             catch { if (cached is not null) cached = cached with { Stale = true }; nextFetch = DateTimeOffset.UtcNow.AddMinutes(5); }

@@ -53,6 +53,14 @@ struct Quote {
         return holdingMoney(converted, currency: displayCurrency)
     }
     var formatted: String { money(Decimal(string: String(price)) ?? 0) }
+    func sourceSummary(symbol: String, failures: Int) -> String {
+        let stamp = DateFormatter(); stamp.locale = AppLanguage.locale; stamp.dateFormat = "MM/dd HH:mm"
+        let provider = isKoreanStock(symbol) ? "Naver · KRX" : "Yahoo"
+        let seconds = Int(pollDelay(symbol: symbol, quote: self, failures: failures))
+        let unit = AppLanguage.code == "ko" ? "초" : "s"
+        let first = "\(failures > 0 ? "⚠ " : "")\(provider) · \(seconds)\(unit) · \(stamp.string(from: time))"
+        return first + (exchangeNote.isEmpty ? "" : "\n" + exchangeNote)
+    }
     var exchangeNote: String {
         if currency == displayCurrency { return "" }
         guard let fx = exchange, fx.convert(1, from: currency, to: displayCurrency) != nil else {
