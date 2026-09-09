@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+windows/bin/
+windows/obj/
+windows-tests/bin/
+windows-tests/obj/
+
+website/
+src/
+test/
+package.json
+package-lock.json
+LAUNCH.md

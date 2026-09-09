@@ -1,0 +1,23 @@
+Show Me The Money — Windows
+
+한국어
+ZIP 전체를 압축 해제하고 PC 아키텍처에 맞는 .NET 10 Desktop Runtime을 설치한 뒤
+ShowMeTheMoney.exe를 실행하세요. 트레이 아이콘이 숨겨져 있으면 ^ 메뉴를 확인하세요.
+트레이 또는 가격창 클릭으로 검색/설정을 엽니다.
+확인: 국내/해외 검색, 시세 시각, 종목 코드 체크, 평단/소수점 수량 저장,
+평가총액/수익률, 언어 변경 중 입력 유지, 재시작 후 설정 유지, 연결 실패 경고.
+후원 주소가 없으면 후원 버튼은 비활성화됩니다.
+
+English
+Extract the entire ZIP and install the matching .NET 10 Desktop Runtime.
+Launch ShowMeTheMoney.exe. Check hidden tray icons if needed.
+Click the tray or price window to search and configure a stock.
+Check quotes/timestamps, symbol checkbox, fractional holdings, value/return,
+language switching, restart persistence and offline warnings.
+Donation stays disabled until donation.json contains a valid HTTPS URL.
+
+Smoke test (close the app first, then run in PowerShell):
+.\ShowMeTheMoney.exe --smoke-test
+After it exits, check %TEMP%\ShowMeTheMoney-smoke\result.txt for SMOKE_OK.
+This only checks initialization. Actual Windows layout and clicks need manual testing.
+x64/ARM64 builds and portable core tests passed on macOS; Windows UI is unverified.
