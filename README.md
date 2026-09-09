@@ -1,6 +1,6 @@
 # Show Me The Money
 
-[소개 페이지](https://dlgudrms.github.io/showmethemoney/) · [앱 다운로드](https://github.com/dlgudrms/showmethemoney/releases/latest) · [개발자 후원](https://buymeacoffee.com/hglee)
+[소개 페이지](https://dlgudrms.github.io/showmethemoney/) · [앱 다운로드](https://github.com/dlgudrms/showmethemoney/releases/tag/v1.1.0-beta.1) · [개발자 후원](https://buymeacoffee.com/hglee)
 
 무료 베타입니다. Mac은 Apple Silicon용이며 배포용 공증 전입니다. Windows는 x64/ARM64 빌드이며 실제 Windows 기기 UI 검증 전입니다.
 
