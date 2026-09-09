@@ -326,7 +326,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         guard let stock = selected else { return }
         let interval = pollDelay(symbol: stock.symbol, quote: lastQuote, failures: failures)
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+            Task { @MainActor [weak self] in self?.refresh() }
         }
         timer?.tolerance = 0.5
     }
