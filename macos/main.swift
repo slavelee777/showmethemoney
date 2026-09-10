@@ -81,6 +81,33 @@ if CommandLine.arguments.contains("--self-test") {
     let summary = convertedKR.sourceSummary(symbol: "005930.KS", failures: 0)
     precondition(summary.contains("Naver") && summary.contains("7s") && summary.contains("Reference FX") && summary.contains("\n"))
     precondition(convertedKR.sourceSummary(symbol: "005930.KS", failures: 2).contains("60s"))
+    func dailyYahoo(_ previous: Any) throws -> Quote {
+        try Quote.parse(["chart": ["result": [["meta": ["regularMarketPrice": 110.0, "regularMarketTime": 1700000000.0,
+            "currency": "USD", "chartPreviousClose": previous]]]]])
+    }
+    let dailyUp = try dailyYahoo(100); precondition(dailyUp.dailyFormatted == "+10.00%")
+    let dailyDown = try dailyYahoo(125); precondition(dailyDown.dailyFormatted == "-12.00%")
+    let dailyFlat = try dailyYahoo(110); precondition(dailyFlat.dailyFormatted == "0.00%")
+    precondition(quote.dailyPercent == nil)
+    for bad in [0, -1, "bad", "100bad", NSNull(), 1e20] as [Any] { let invalid = try dailyYahoo(bad); precondition(invalid.dailyPercent == nil) }
+    let fallback = try Quote.parse(["chart": ["result": [["meta": ["regularMarketPrice": 110.0,
+        "regularMarketTime": 1700000000.0, "previousClose": 100, "chartPreviousClose": 0]]]]])
+    precondition(fallback.dailyPercent == 10)
+    for (diff, expected) in [("10", "+10.00%"), ("-15", "-12.00%"), ("0", "0.00%")] {
+        let daily = try Quote.parseNaver(["datas": [["itemCode":"005930", "closePrice":"110", "compareToPreviousClosePrice":diff,
+            "marketStatus":"CLOSE", "localTradedAt":"2026-09-09T15:30:00+09:00"]]], code: "005930")
+        precondition(daily.dailyFormatted == expected)
+    }
+    precondition(naverQuote.dailyFormatted == "—")
+    var dailyFX = try dailyYahoo(100); dailyFX.exchange = fx
+    AppLanguage.code = "ko"
+    precondition(dailyFX.formatted == "₩110,000" && dailyFX.dailyFormatted == "+10.00%")
+    precondition(PriceDisplayMode.resolve(nil, legacyTotal: true) == .holding)
+    precondition(PriceDisplayMode.resolve(nil, legacyTotal: false) == .price)
+    precondition(PriceDisplayMode.resolve("daily", legacyTotal: true) == .daily)
+    precondition(PriceDisplayMode.resolve("price", legacyTotal: true) == .price)
+    precondition(PriceDisplayMode.resolve("unknown", legacyTotal: true) == .holding)
+    print("PASS: daily change, invalid/missing previous close, FX-independent percentage and mode migration")
     print("PASS: symbol normalization, Korean search, quote parsing, missing-data rejection")
 } else {
     MainActor.assumeIsolated {

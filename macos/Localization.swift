@@ -7,6 +7,11 @@ enum AppLanguage {
     }()
     static var locale: Locale { Locale(identifier: code == "ko" ? "ko_KR" : "en_US") }
     static let english: [String: String] = [
+        "현재가만 보기": "Current price only",
+        "현재가 + 전일 대비 등락률": "Price + daily change",
+        "평가총액 + 보유 수익률": "Holding value + return",
+        "전일 대비": "Daily change",
+        "직전 거래일 종가 기준 · 환율 변동 제외": "Previous trading close · Excludes FX changes",
         "종목을 검색하고 선택하세요": "Search and select a stock",
         "국내: 네이버 KRX 7초 · 해외: Yahoo 15초": "KRX: Naver 7s · Other: Yahoo 15s",
         "종목 코드": "Symbol", "평가총액 + 수익률로 표시": "Show holding value + return",

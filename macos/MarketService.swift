@@ -46,6 +46,24 @@ struct Quote {
     var marketStatus = ""
     var sessionOpen: Bool? = nil
     var exchange: ExchangeRates? = nil
+    var previousClose: Decimal? = nil
+    var dailyPercent: Decimal? {
+        guard let previous = previousClose, previous >= Decimal(string: "0.00000001")!, previous <= 999_999_999_999,
+              price.isFinite, price > 0, price <= 999_999_999_999,
+              let current = Decimal(string: String(price)) else { return nil }
+        return (current - previous) / previous * 100
+    }
+    var dailyFormatted: String { dailyPercent.map(holdingPercent) ?? "—" }
+    static func number(_ value: Any?) -> Decimal? {
+        let text = ((value as? String) ?? (value as? NSNumber)?.stringValue ?? "").replacingOccurrences(of: ",", with: "")
+        guard text.range(of: "^[+-]?[0-9]+(\\.[0-9]+)?$", options: .regularExpression) != nil else { return nil }
+        return Decimal(string: text, locale: Locale(identifier: "en_US_POSIX"))
+    }
+    static func previousValue(_ value: Any?) -> Decimal? {
+        guard let n = number(value),
+              n >= Decimal(string: "0.00000001")!, n <= 999_999_999_999 else { return nil }
+        return n
+    }
     var displayCurrency: String { AppLanguage.code == "ko" ? "KRW" : "USD" }
     func money(_ amount: Decimal) -> String {
         if currency == displayCurrency { return holdingMoney(amount, currency: displayCurrency) }
@@ -82,7 +100,7 @@ struct Quote {
             let now = Date().timeIntervalSince1970
             open = start <= now && now < end
         }
-        return Quote(price: price, currency: meta["currency"] as? String ?? "", time: Date(timeIntervalSince1970: timestamp), sessionOpen: open)
+        return Quote(price: price, currency: meta["currency"] as? String ?? "", time: Date(timeIntervalSince1970: timestamp), sessionOpen: open, previousClose: previousValue(meta["chartPreviousClose"]) ?? previousValue(meta["previousClose"]))
     }
     static func parseNaver(_ json: [String: Any], code: String) throws -> Quote {
         guard let items = json["datas"] as? [[String: Any]],
@@ -96,7 +114,13 @@ struct Quote {
         formatter.formatOptions = [.withInternetDateTime]
         guard let time = fractionalTime ?? formatter.date(from: rawTime) else { throw MarketError.unavailable }
         let isOpen = item["marketStatus"] as? String == "OPEN"
-        return Quote(price: price, currency: "KRW", time: time, source: "네이버 · KRX", marketStatus: isOpen ? "장중" : "장 마감/거래 대기", sessionOpen: isOpen)
+        var previous: Decimal? = nil
+        if let raw = item["compareToPreviousClosePrice"] as? String,
+           let difference = Self.number(raw),
+           abs(difference) <= 999_999_999_999, let current = Decimal(string: String(price)) {
+            previous = Self.previousValue(NSDecimalNumber(decimal: current - difference))
+        }
+        return Quote(price: price, currency: "KRW", time: time, source: "네이버 · KRX", marketStatus: isOpen ? "장중" : "장 마감/거래 대기", sessionOpen: isOpen, previousClose: previous)
     }
 }
 func isKoreanStock(_ symbol: String) -> Bool {

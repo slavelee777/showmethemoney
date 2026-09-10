@@ -12,7 +12,9 @@ sealed class SearchForm : Form
     readonly TextBox average = new() { Dock = DockStyle.Fill };
     readonly TextBox shares = new() { Dock = DockStyle.Fill };
     readonly CheckBox symbol = new() { Dock = DockStyle.Fill };
-    readonly CheckBox total = new() { Dock = DockStyle.Fill };
+    readonly RadioButton total = new() { Dock = DockStyle.Fill };
+    readonly RadioButton priceOnly = new() { Dock = DockStyle.Fill };
+    readonly RadioButton daily = new() { Dock = DockStyle.Fill };
     readonly Button save = new() { Dock = DockStyle.Fill };
     readonly Label message = new() { Dock = DockStyle.Fill, AutoEllipsis = true };
     readonly Label sourceLabel = new() { Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = SystemColors.GrayText };
@@ -36,12 +38,12 @@ sealed class SearchForm : Form
         donation = Donation.Read(AppContext.BaseDirectory);
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10);
-        ClientSize = new Size(420, 640);
+        ClientSize = new Size(420, 696);
         FormBorderStyle = FormBorderStyle.FixedToolWindow;
         ShowInTaskbar = false; TopMost = true;
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 10 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (var height in new float[] { 34, -1, 44, 28, 24, 66, 28, 34, 64, 36 })
+        foreach (var height in new float[] { 34, -1, 44, 28, 24, 66, 84, 34, 64, 36 })
             root.RowStyles.Add(new RowStyle(height < 0 ? SizeType.Percent : SizeType.Absolute, height < 0 ? 100 : height));
         root.Controls.Add(search, 0, 0); root.Controls.Add(list, 0, 1); root.Controls.Add(quoteLabel, 0, 2);
         root.Controls.Add(symbol, 0, 3); root.Controls.Add(holdingTitle, 0, 4);
@@ -50,7 +52,9 @@ sealed class SearchForm : Form
         inputs.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); inputs.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         inputs.Controls.Add(averageLabel, 0, 0); inputs.Controls.Add(sharesLabel, 1, 0);
         inputs.Controls.Add(average, 0, 1); inputs.Controls.Add(shares, 1, 1); inputs.Controls.Add(save, 2, 1);
-        root.Controls.Add(inputs, 0, 5); root.Controls.Add(total, 0, 6); root.Controls.Add(message, 0, 7); root.Controls.Add(sourceLabel, 0, 8);
+        root.Controls.Add(inputs, 0, 5); var modes = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, ColumnCount = 1, RowCount = 3 };
+        foreach (var radio in new[] { priceOnly, daily, total }) { modes.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333f)); modes.Controls.Add(radio); }
+        root.Controls.Add(modes, 0, 6); root.Controls.Add(message, 0, 7); root.Controls.Add(sourceLabel, 0, 8);
         var footer = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, ColumnCount = 3, RowCount = 1 };
         foreach (float percent in new[] { 48f, 32f, 20f }) footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, percent));
         footer.Controls.Add(donate, 0, 0); footer.Controls.Add(language, 1, 0); footer.Controls.Add(quit, 2, 0);
@@ -73,12 +77,12 @@ sealed class SearchForm : Form
         save.Click += (_, _) => SaveHolding(total.Checked);
         foreach (var field in new[] { average, shares }) field.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { SaveHolding(total.Checked); e.SuppressKeyPress = true; } };
         symbol.CheckedChanged += (_, _) => { if (binding) return; var next = state().Copy(); next.ShowSymbol = symbol.Checked; if (!commit(next)) SetChecked(symbol, state().ShowSymbol); };
-        total.CheckedChanged += (_, _) => {
-            if (binding) return;
-            if (total.Checked) { if (!SaveHolding(true)) SetChecked(total, false); }
-            else if (state().Selected is Stock stock && state().Holdings.TryGetValue(stock.Symbol, out var holding)) {
-                var next = state().Copy(); next.Holdings[stock.Symbol] = holding with { ShowTotal = false };
-                if (!commit(next)) SetChecked(total, true);
+        foreach (var radio in new[] { priceOnly, daily, total }) radio.CheckedChanged += (_, _) => {
+            if (binding || !radio.Checked) return;
+            if (radio == total) { if (!SaveHolding(true)) SyncMode(); }
+            else {
+                var next = state().Copy(); next.DisplayMode = radio == daily ? PriceDisplayMode.Daily : PriceDisplayMode.Price;
+                if (!commit(next)) SyncMode();
             }
         };
         language.SelectedIndexChanged += (_, _) => {
@@ -109,6 +113,7 @@ sealed class SearchForm : Form
         var a = Holding.Number(average.Text); var s = Holding.Number(shares.Text);
         if (a is null || s is null) { Error(T("평단·수량은 0보다 큰 숫자로 입력하세요 (소수 8자리까지)", "Enter positive cost and shares (up to 8 decimals)")); return false; }
         var next = state().Copy(); next.Holdings[stock.Symbol] = new(a.Value, s.Value, showTotal);
+        if (showTotal) next.DisplayMode = PriceDisplayMode.Holding;
         if (!commit(next)) return false;
         message.ForeColor = SystemColors.GrayText;
         message.Text = T("저장됨 · 종목 통화 기준 · 수수료·세금 제외", "Saved · Stock currency · Fees/taxes excluded");
@@ -121,10 +126,18 @@ sealed class SearchForm : Form
         average.Text = holding?.AverageCost.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
         shares.Text = holding?.Shares.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
         average.Enabled = shares.Enabled = save.Enabled = total.Enabled = settings.Selected is not null;
-        SetChecked(total, holding?.ShowTotal == true);
+        SyncMode();
         message.Text = T("평단과 수량 입력 후 저장 · 수수료·세금 제외", "Save cost and shares · Fees/taxes excluded");
         message.ForeColor = SystemColors.GrayText;
         UpdateHoldingLabels();
+    }
+    void SyncMode() {
+        binding = true;
+        var mode = state().EffectiveMode;
+        priceOnly.Checked = mode == PriceDisplayMode.Price;
+        daily.Checked = mode == PriceDisplayMode.Daily;
+        total.Checked = mode == PriceDisplayMode.Holding;
+        binding = false;
     }
     void UpdateHoldingLabels()
     {
@@ -137,7 +150,10 @@ sealed class SearchForm : Form
         binding = true;
         Text = T("주식 검색", "Stock search"); search.PlaceholderText = T("종목명 또는 코드 검색", "Search name or symbol");
         symbol.Text = T("종목 코드 표시", "Show symbol"); symbol.Checked = state().ShowSymbol;
-        total.Text = T("평가총액 + 수익률로 표시", "Show holding value + return");
+        total.Text = T("평가총액 + 보유 수익률", "Holding value + return");
+        priceOnly.Text = T("현재가만 보기", "Current price only");
+        daily.Text = T("현재가 + 전일 대비 등락률", "Price + daily change");
+        tips.SetToolTip(daily, T("직전 거래일 종가 기준 · 환율 변동 제외", "Previous trading close · Excludes FX changes"));
         sharesLabel.Text = T("보유 수량 (주)", "Shares"); save.Text = T("저장", "Save"); quit.Text = T("종료", "Quit");
         average.PlaceholderText = T("예: 250000", "e.g. 250000"); shares.PlaceholderText = T("예: 10", "e.g. 10");
         average.AccessibleName = T("평균 매수가, 종목 통화 기준", "Average cost in stock currency"); shares.AccessibleName = T("보유 수량", "Number of shares");

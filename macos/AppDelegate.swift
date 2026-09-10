@@ -16,7 +16,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
     let note = NSTextField(labelWithString: L("종목을 검색하고 선택하세요"))
     let sourceLabel = NSTextField(labelWithString: L("국내: 네이버 KRX 7초 · 해외: Yahoo 15초"))
     let symbolCheckbox = NSButton(checkboxWithTitle: L("종목 코드"), target: nil, action: nil)
-    let totalCheckbox = NSButton(checkboxWithTitle: L("평가총액 + 수익률로 표시"), target: nil, action: nil)
+    let totalCheckbox = NSButton(radioButtonWithTitle: L("평가총액 + 보유 수익률"), target: nil, action: nil)
+    let priceRadio = NSButton(radioButtonWithTitle: L("현재가만 보기"), target: nil, action: nil)
+    let dailyRadio = NSButton(radioButtonWithTitle: L("현재가 + 전일 대비 등락률"), target: nil, action: nil)
+    var displayMode: PriceDisplayMode {
+        get {
+            PriceDisplayMode.resolve(UserDefaults.standard.string(forKey: "priceDisplayMode"),
+                legacyTotal: selected.flatMap { holdings[$0.symbol] }?.showTotal == true)
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "priceDisplayMode") }
+    }
     let averageField = NSTextField()
     let sharesField = NSTextField()
     let holdingTitle = NSTextField(labelWithString: L("내 보유"))
@@ -141,8 +150,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         totalCheckbox.frame = NSRect(x: 14, y: 80, width: 302, height: 22)
         totalCheckbox.font = .systemFont(ofSize: 11)
         totalCheckbox.target = self
-        totalCheckbox.action = #selector(changeTotalMode)
+        totalCheckbox.action = #selector(changeTotalMode(_:))
         vc.view.addSubview(totalCheckbox)
+        // Reserve two more rows without reducing search results or the holding inputs.
+        for view in vc.view.subviews where view !== totalCheckbox { view.frame.origin.y += 44 }
+        vc.view.frame.size.height += 44
+        for (index, radio) in [priceRadio, dailyRadio].enumerated() {
+            radio.frame = NSRect(x: 14, y: 124 - index * 22, width: 302, height: 22)
+            radio.font = .systemFont(ofSize: 11)
+            radio.target = self
+            radio.action = #selector(changeTotalMode(_:))
+            vc.view.addSubview(radio)
+        }
         holdingMessage.frame = NSRect(x: 14, y: 60, width: 302, height: 16)
         holdingMessage.font = .systemFont(ofSize: 9)
         holdingMessage.textColor = .secondaryLabelColor
@@ -240,7 +259,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         search.placeholderString = L("종목명 또는 코드 검색")
         displayLabel.stringValue = L("가격에 추가 표시")
         symbolCheckbox.title = L("종목 코드")
-        totalCheckbox.title = L("평가총액 + 수익률로 표시")
+        totalCheckbox.title = L("평가총액 + 보유 수익률")
+        priceRadio.title = L("현재가만 보기")
+        dailyRadio.title = L("현재가 + 전일 대비 등락률")
+        dailyRadio.toolTip = L("직전 거래일 종가 기준 · 환율 변동 제외")
         sharesLabel.stringValue = L("보유 수량 (주)")
         saveHoldingButton.title = L("저장")
         quitButton.title = L("종료")
@@ -298,7 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         sharesField.isEnabled = selected != nil
         saveHoldingButton.isEnabled = selected != nil
         totalCheckbox.isEnabled = selected != nil
-        totalCheckbox.state = saved?.showTotal == true ? .on : .off
+        syncDisplayMode()
         holdingMessage.stringValue = L("평단과 수량 입력 후 저장 · 수수료·세금 제외")
         holdingMessage.textColor = .secondaryLabelColor
     }
@@ -322,15 +344,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         return true
     }
     @objc func saveHolding() { saveHoldingValues(showTotal: totalCheckbox.state == .on) }
-    @objc func changeTotalMode() {
-        if totalCheckbox.state == .on {
-            if !saveHoldingValues(showTotal: true) { totalCheckbox.state = .off }
-        } else if let stock = selected, var saved = holdings[stock.symbol] {
-            saved.showTotal = false
-            holdings[stock.symbol] = saved
-            storeHoldings()
-            renderStatus()
+    func syncDisplayMode() {
+        priceRadio.state = displayMode == .price ? .on : .off
+        dailyRadio.state = displayMode == .daily ? .on : .off
+        totalCheckbox.state = displayMode == .holding ? .on : .off
+    }
+    @objc func changeTotalMode(_ sender: NSButton) {
+        if sender === totalCheckbox {
+            guard saveHoldingValues(showTotal: true) else { syncDisplayMode(); return }
+            displayMode = .holding
+        } else {
+            displayMode = sender === dailyRadio ? .daily : .price
         }
+        syncDisplayMode()
+        renderStatus()
     }
     @objc func changeDisplayMode() {
         showSymbol = symbolCheckbox.state == .on
@@ -341,16 +368,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         status.button?.image = nil
         guard let stock = selected else { status.button?.title = L("주식"); return }
         var price = lastQuote?.formatted ?? "—"
-        if let holding = holdings[stock.symbol], holding.showTotal {
-            if let quote = lastQuote, let result = holding.valuation(price: quote.price) {
+        if displayMode == .holding {
+            if let holding = holdings[stock.symbol], let quote = lastQuote,
+               let result = holding.valuation(price: quote.price) {
                 price = "\(quote.money(result.total)) (\(holdingPercent(result.percent)))"
             } else { price = L("평가 —") }
+        } else if displayMode == .daily {
+            price += " (\(lastQuote?.dailyFormatted ?? "—"))"
         }
         let text = showSymbol ? "\(stock.symbol) \(price)" : price
         status.button?.title = text + (quoteFailed ? " ⚠" : "")
         if let quote = lastQuote {
             let time = quoteDate(quote.time)
             var tip = "\(stock.displayName) (\(stock.symbol)) · \(L("현재가")) \(quote.formatted)\n\(L(quote.source)) · \(L("시세 기준")) \(time)"
+            tip += "\n\(L("전일 대비")) \(quote.dailyFormatted) · \(L("직전 거래일 종가 기준 · 환율 변동 제외"))"
             if let holding = holdings[stock.symbol], let result = holding.valuation(price: quote.price) {
                 tip += "\n\(L("평가금액")) \(quote.money(result.total)) · \(L("손익")) \(quote.money(result.profit)) (\(holdingPercent(result.percent)))\n\(L("수수료·세금 제외"))"
             }

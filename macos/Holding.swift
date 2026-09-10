@@ -1,5 +1,12 @@
 import Foundation
 
+enum PriceDisplayMode: String {
+    case price, daily, holding
+    static func resolve(_ raw: String?, legacyTotal: Bool) -> Self {
+        raw.flatMap(Self.init(rawValue:)) ?? (legacyTotal ? .holding : .price)
+    }
+}
+
 struct Holding: Codable {
     let averageCost: Decimal
     let shares: Decimal

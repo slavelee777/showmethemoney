@@ -116,3 +116,40 @@ Check(summary.Contains("Naver") && summary.Contains("7s") && summary.Contains("R
 Check(kr.SourceSummary("005930.KS",2).Contains("60s") && kr.SourceSummary("005930.KS",2).Contains("Reference FX"), "quote failure retains FX and shows retry interval");
 Check((kr with { Open=false }).SourceSummary("005930.KS",0).Contains("60s"), "closed interval displayed");
 Console.WriteLine($"PASS: {count} total checks including persistent FX and source summary");
+
+Quote DailyYahoo(object? previous) {
+    using var json = JsonDocument.Parse(JsonSerializer.Serialize(new { chart = new { result = new[] { new { meta = new { regularMarketPrice=110, regularMarketTime=1700000000, currency="USD", chartPreviousClose=previous } } } } }));
+    return Market.ParseYahoo(json.RootElement);
+}
+Check(DailyYahoo(100).DailyFormatted == "+10.00%", "daily gain");
+Check(DailyYahoo(125).DailyFormatted == "-12.00%", "daily loss");
+Check(DailyYahoo(110).DailyFormatted == "0.00%", "daily flat");
+foreach (var bad in new object?[] { null, 0, -1, "bad", "100bad", 1e20m }) Check(DailyYahoo(bad).DailyPercent is null, "invalid previous close keeps quote");
+Check(us.DailyFormatted == "—", "missing previous close");
+using (var fallbackDaily = JsonDocument.Parse("""{"chart":{"result":[{"meta":{"regularMarketPrice":110,"regularMarketTime":1700000000,"chartPreviousClose":0,"previousClose":100}}]}}"""))
+    Check(Market.ParseYahoo(fallbackDaily.RootElement).DailyPercent == 10, "Yahoo previousClose fallback");
+foreach (var (delta, expected) in new[] { ("10", "+10.00%"), ("-15", "-12.00%"), ("0", "0.00%"), ("bad", "—"), ("110", "—") }) {
+    using var fixtureDaily = JsonDocument.Parse(JsonSerializer.Serialize(new { datas = new[] { new { itemCode="005930", closePrice="110", compareToPreviousClosePrice=delta, marketStatus="CLOSE", localTradedAt="2026-09-09T15:30:00+09:00" } } }));
+    Check(Market.ParseNaver(fixtureDaily.RootElement, "005930").DailyFormatted == expected, "Naver signed difference and missing reference");
+}
+var modes = new Settings { Selected=new("AAPL", "Apple"), ShowSymbol=false, Holdings=new() { ["AAPL"]=new(100,2,true) } };
+Check(modes.EffectiveMode == PriceDisplayMode.Holding, "legacy holding migration");
+modes.DisplayMode = PriceDisplayMode.Price;
+Check(Format.Ticker(modes, DailyYahoo(100), false) == "$110.00", "explicit price overrides legacy holding");
+modes.DisplayMode = PriceDisplayMode.Daily;
+Check(Format.Ticker(modes, DailyYahoo(100), false) == "$110.00 (+10.00%)", "daily mode");
+Check(Format.Ticker(modes, us, true) == "$123.45 (—) ⚠", "daily missing reference and failed quote");
+Lang.Code="ko";
+Check(Format.Ticker(modes, DailyYahoo(100) with { Exchange=fx }, false) == "₩110,000 (+10.00%)", "daily percentage excludes FX");
+Lang.Code="en";
+modes.DisplayMode = PriceDisplayMode.Holding;
+Check(Format.Ticker(modes, DailyYahoo(100), false) == "$220.00 (+10.00%)", "holding mode remains separate");
+modes.Holdings.Clear();
+Check(Format.Ticker(modes, DailyYahoo(100), false) == "Value —", "holding mode without position");
+modes.DisplayMode = PriceDisplayMode.Daily;
+var modeDir = Path.Combine(Path.GetTempPath(), "smtm-modes-" + Guid.NewGuid());
+try {
+    SettingsStore.Save(modeDir, modes);
+    Check(SettingsStore.Load(modeDir).Copy().EffectiveMode == PriceDisplayMode.Daily, "display mode survives save and copy");
+} finally { Directory.Delete(modeDir, true); }
+Console.WriteLine($"PASS: {count} total checks including three display modes and daily changes");

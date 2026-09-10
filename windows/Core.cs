@@ -13,6 +13,7 @@ record Stock(string Symbol, string Name)
     internal string DisplayName => Lang.Code == "en" ? Market.EnglishNames.GetValueOrDefault(Symbol, Name == "코드로 선택" ? "Use this symbol" : Name) : Name;
     public override string ToString() => $"{DisplayName} · {Symbol}";
 }
+enum PriceDisplayMode { Price, Daily, Holding }
 record Holding(decimal AverageCost, decimal Shares, bool ShowTotal)
 {
     internal bool Valid => AverageCost >= 0.00000001m && Shares >= 0.00000001m && decimal.Round(AverageCost, 8) == AverageCost && decimal.Round(Shares, 8) == Shares && AverageCost <= 999999999999m && Shares <= 999999999999m;
@@ -31,6 +32,10 @@ record Quote(decimal Price, string Currency, DateTimeOffset Time, bool Naver, bo
 {
     internal string Source => (SessionKnown && !Open ? Lang.T("장 종료 · 60초 갱신 · ", "Closed · 60s · ") : "") + (Naver ? Lang.T("네이버 · KRX", "Naver · KRX") : Lang.T("Yahoo · 지연 가능", "Yahoo · May be delayed"));
     internal ExchangeRates? Exchange { get; init; }
+    internal decimal? PreviousClose { get; init; }
+    internal decimal? DailyPercent => PreviousClose is >= 0.00000001m and <= 999999999999m && Price is > 0 and <= 999999999999m
+        ? (Price - PreviousClose.Value) / PreviousClose.Value * 100 : null;
+    internal string DailyFormatted => DailyPercent is decimal n ? Format.Percent(n) : "—";
     internal string DisplayCurrency => Lang.Code == "ko" ? "KRW" : "USD";
     internal string Money(decimal amount) {
         if (Currency == DisplayCurrency) return Format.Money(amount, DisplayCurrency);
@@ -55,11 +60,12 @@ static class Format
     {
         if (settings.Selected is not Stock stock) return Lang.T("주식 검색", "Search stocks");
         var text = quote?.Formatted ?? "—";
-        if (settings.Holdings.TryGetValue(stock.Symbol, out var holding) && holding.ShowTotal)
+        if (settings.EffectiveMode == PriceDisplayMode.Holding)
         {
-            if (quote is null) text = Lang.T("평가 —", "Value —");
+            if (quote is null || !settings.Holdings.TryGetValue(stock.Symbol, out var holding)) text = Lang.T("평가 —", "Value —");
             else { var value = holding.Value(quote.Price); text = $"{quote.Money(value.Total)} ({Percent(value.Percent)})"; }
         }
+        else if (settings.EffectiveMode == PriceDisplayMode.Daily) text += $" ({quote?.DailyFormatted ?? "—"})";
         return (settings.ShowSymbol ? stock.Symbol + " " : "") + text + (failed ? " ⚠" : "");
     }
     internal static string Detail(Settings settings, Quote? quote, bool failed)
@@ -69,6 +75,7 @@ static class Format
         if (quote is not null)
         {
             text += $"\n{Lang.T("현재가", "Price")} {quote.Formatted} · {quote.Source}\n{Lang.T("시세 기준", "As of")} {quote.Time.LocalDateTime.ToString("G", Lang.Culture)}";
+            text += $"\n{Lang.T("전일 대비", "Daily change")} {quote.DailyFormatted} · {Lang.T("직전 거래일 종가 기준 · 환율 변동 제외", "Previous trading close · Excludes FX changes")}";
             if (quote.ExchangeNote.Length > 0) text += "\n" + quote.ExchangeNote;
             if (quote.Naver) text += " · " + (quote.Open ? Lang.T("장중", "Open") : Lang.T("장 마감/대기", "Closed/waiting"));
             if (settings.Holdings.TryGetValue(stock.Symbol, out var holding))
@@ -85,9 +92,12 @@ sealed class Settings
 {
     public Stock? Selected { get; set; }
     public bool ShowSymbol { get; set; } = true;
+    public PriceDisplayMode? DisplayMode { get; set; }
+    internal PriceDisplayMode EffectiveMode => DisplayMode is PriceDisplayMode mode && Enum.IsDefined(mode) ? mode
+        : Selected is Stock stock && Holdings.TryGetValue(stock.Symbol, out var holding) && holding.ShowTotal ? PriceDisplayMode.Holding : PriceDisplayMode.Price;
     public string Language { get; set; } = Lang.Code;
     public Dictionary<string, Holding> Holdings { get; set; } = new();
-    internal Settings Copy() => new() { Selected = Selected, ShowSymbol = ShowSymbol, Language = Language, Holdings = new(Holdings) };
+    internal Settings Copy() => new() { Selected = Selected, ShowSymbol = ShowSymbol, DisplayMode = DisplayMode, Language = Language, Holdings = new(Holdings) };
 }
 static class SettingsStore
 {
@@ -176,7 +186,7 @@ static class Market
         var meta = root.GetProperty("chart").GetProperty("result")[0].GetProperty("meta");
         var price = meta.GetProperty("regularMarketPrice").GetDecimal();
         ValidatePrice(price);
-        return new(price, meta.TryGetProperty("currency", out var c) ? c.GetString() ?? "" : "", DateTimeOffset.FromUnixTimeSeconds(meta.GetProperty("regularMarketTime").GetInt64()), false, TradingOpen(meta), meta.TryGetProperty("currentTradingPeriod", out var period) && period.TryGetProperty("regular", out _));
+        return new(price, meta.TryGetProperty("currency", out var c) ? c.GetString() ?? "" : "", DateTimeOffset.FromUnixTimeSeconds(meta.GetProperty("regularMarketTime").GetInt64()), false, TradingOpen(meta), meta.TryGetProperty("currentTradingPeriod", out var period) && period.TryGetProperty("regular", out _)) { PreviousClose = PreviousValue(meta, "chartPreviousClose") ?? PreviousValue(meta, "previousClose") };
     }
     static bool TradingOpen(JsonElement meta)
     {
@@ -190,8 +200,20 @@ static class Market
         var price = decimal.Parse(item.GetProperty("closePrice").GetString()!.Replace(",", ""), CultureInfo.InvariantCulture);
         ValidatePrice(price);
         var time = DateTimeOffset.Parse(item.GetProperty("localTradedAt").GetString()!, CultureInfo.InvariantCulture);
-        return new(price, "KRW", time, true, item.GetProperty("marketStatus").GetString() == "OPEN", true);
+        decimal? previous = null;
+        if (Number(item, "compareToPreviousClosePrice") is decimal delta && delta is >= -999999999999m and <= 999999999999m) {
+            var value = price - delta;
+            if (value is >= 0.00000001m and <= 999999999999m) previous = value;
+        }
+        return new(price, "KRW", time, true, item.GetProperty("marketStatus").GetString() == "OPEN", true) { PreviousClose = previous };
     }
+    static decimal? Number(JsonElement item, string name) {
+        if (!item.TryGetProperty(name, out var value)) return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)) return number;
+        if (value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString()?.Replace(",", ""), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out number)) return number;
+        return null;
+    }
+    static decimal? PreviousValue(JsonElement item, string name) => Number(item, name) is decimal n && n is >= 0.00000001m and <= 999999999999m ? n : null;
     static void ValidatePrice(decimal price) { if (price <= 0 || price > 999999999999m) throw new InvalidDataException("Invalid quote"); }
     internal static async Task<Quote> Latest(string symbol, CancellationToken token)
     {

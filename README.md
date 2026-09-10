@@ -20,7 +20,9 @@ Mac 앱 UI로 만든 10초 사용 예시입니다. 가격은 예시 데이터입
 압축을 풀고 앱을 실행한 뒤, 종목을 검색해서 고르면 됩니다.
 `삼성전자`, `AAPL`, `005930`, `086520`처럼 이름이나 코드로 검색할 수 있습니다.
 
-- 가격만 볼 수도 있고, 종목 코드를 같이 표시할 수도 있습니다.
+- 현재가만 / 현재가 + 전일 대비 등락률 / 평가총액 + 보유 수익률 중 하나를 고릅니다.
+- 종목 코드는 별도로 켜고 끌 수 있습니다.
+- 전일 대비는 직전 거래일 종가 기준입니다. 환율 변동은 제외하며, 기준값이 없으면 `—`로 표시합니다.
 - 평단과 수량을 넣으면 평가금액과 수익률로 바꿔 볼 수 있습니다.
 - 한국어에서는 원화(₩), 영어에서는 달러($)로 환산해서 보여줍니다.
 - 평단 입력은 해당 종목의 거래 통화 기준입니다. 입력란에서 통화를 확인하세요.
@@ -59,7 +61,9 @@ It shows the price in the Mac menu bar or a small window above the Windows taskb
 
 Unzip, launch, search for a stock, and select it. Try `AAPL`, `Samsung`, or a Korean stock code such as `005930`.
 
-- Show just the price, or include the stock symbol.
+- Choose current price only, price + daily change, or holding value + return.
+- Toggle the stock symbol separately.
+- Daily change uses the previous trading day’s close and excludes FX changes. Missing reference data shows `—`.
 - Enter your average cost and shares to see holding value and return.
 - Korean displays KRW (₩); English displays USD ($).
 - Enter average cost in the stock's trading currency, shown beside the input.
