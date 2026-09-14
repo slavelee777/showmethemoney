@@ -226,6 +226,8 @@ sealed class StockApp : ApplicationContext
     bool failed, exiting;
     int failures;
     CancellationTokenSource? request;
+    Point? dragCursor, dragWindow;
+    bool dragged;
     public StockApp(string? testDirectory = null)
     {
         directory = testDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ShowMeTheMoney");
@@ -234,7 +236,30 @@ sealed class StockApp : ApplicationContext
         tray = new NotifyIcon { Icon = appIcon, Visible = true };
         search = new SearchForm(() => settings, Commit, Select, () => ExitThread());
         ticker.Controls.Add(price); ticker.Icon = appIcon; search.Icon = appIcon;
-        price.Click += (_, _) => search.Open();
+        price.MouseDown += (_, e) => {
+            if (e.Button != MouseButtons.Left) return;
+            dragCursor = Cursor.Position; dragWindow = ticker.Location; dragged = false;
+        };
+        price.MouseMove += (_, e) => {
+            if (dragCursor is not Point start || dragWindow is not Point origin || e.Button != MouseButtons.Left) return;
+            var cursor = Cursor.Position;
+            var dx = cursor.X - start.X; var dy = cursor.Y - start.Y;
+            if (!dragged && Math.Abs(dx) < SystemInformation.DragSize.Width / 2 && Math.Abs(dy) < SystemInformation.DragSize.Height / 2) return;
+            dragged = true; price.Cursor = Cursors.SizeAll;
+            var area = Screen.FromPoint(cursor).WorkingArea;
+            ticker.Width = Math.Min(ticker.Width, Math.Max(1, area.Width - 8));
+            var position = TickerPlacement.Clamp(origin.X + dx, origin.Y + dy, ticker.Width, ticker.Height, area.Left, area.Top, area.Right, area.Bottom);
+            ticker.Location = new Point(position.X, position.Y);
+        };
+        price.MouseUp += (_, e) => {
+            if (e.Button != MouseButtons.Left || dragCursor is null) return;
+            var moved = dragged;
+            dragCursor = null; dragWindow = null; dragged = false; price.Cursor = Cursors.Hand;
+            if (moved) {
+                var next = settings.Copy(); next.TickerX = ticker.Left; next.TickerY = ticker.Top;
+                Commit(next);
+            } else search.Open();
+        };
         tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) search.Open(); };
         timer.Tick += async (_, _) => await Refresh();
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += DisplayChanged;
@@ -297,11 +322,17 @@ sealed class StockApp : ApplicationContext
         price.Text = Format.Ticker(settings, quote, failed);
         var detail = Format.Detail(settings, quote, failed);
         tray.Text = detail.Length > 127 ? detail[..127] : detail;
-        tooltip.SetToolTip(price, detail);
+        tooltip.SetToolTip(price, detail + "\n" + T("클릭: 검색 · 드래그: 이동", "Click: search · Drag: move"));
         search.UpdateQuote(quote, failed, failures);
-        var area = Screen.FromControl(ticker).WorkingArea;
+        var manual = settings.TickerX.HasValue && settings.TickerY.HasValue;
+        var x = settings.TickerX.GetValueOrDefault(); var y = settings.TickerY.GetValueOrDefault();
+        var area = dragCursor is not null ? Screen.FromControl(ticker).WorkingArea
+            : manual ? Screen.FromPoint(new Point(x, y)).WorkingArea : Screen.FromControl(ticker).WorkingArea;
         ticker.Width = Math.Min(Math.Max(1, area.Width - 8), Math.Max(160, TextRenderer.MeasureText(price.Text, price.Font).Width + 28));
-        ticker.Location = new Point(Math.Max(area.Left, area.Right - ticker.Width - 4), Math.Max(area.Top, area.Bottom - ticker.Height - 4));
+        var position = dragCursor is not null ? TickerPlacement.Clamp(ticker.Left, ticker.Top, ticker.Width, ticker.Height, area.Left, area.Top, area.Right, area.Bottom)
+            : manual ? TickerPlacement.Clamp(x, y, ticker.Width, ticker.Height, area.Left, area.Top, area.Right, area.Bottom)
+            : TickerPlacement.Clamp(area.Right - ticker.Width - 4, area.Bottom - ticker.Height - 4, ticker.Width, ticker.Height, area.Left, area.Top, area.Right, area.Bottom);
+        ticker.Location = new Point(position.X, position.Y);
     }
     async Task Refresh()
     {

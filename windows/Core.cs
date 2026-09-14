@@ -97,7 +97,14 @@ sealed class Settings
         : Selected is Stock stock && Holdings.TryGetValue(stock.Symbol, out var holding) && holding.ShowTotal ? PriceDisplayMode.Holding : PriceDisplayMode.Price;
     public string Language { get; set; } = Lang.Code;
     public Dictionary<string, Holding> Holdings { get; set; } = new();
-    internal Settings Copy() => new() { Selected = Selected, ShowSymbol = ShowSymbol, DisplayMode = DisplayMode, Language = Language, Holdings = new(Holdings) };
+    public int? TickerX { get; set; }
+    public int? TickerY { get; set; }
+    internal Settings Copy() => new() { Selected = Selected, ShowSymbol = ShowSymbol, DisplayMode = DisplayMode, Language = Language, Holdings = new(Holdings), TickerX = TickerX, TickerY = TickerY };
+}
+static class TickerPlacement
+{
+    internal static (int X, int Y) Clamp(int x, int y, int width, int height, int left, int top, int right, int bottom) =>
+        (Math.Clamp(x, left, Math.Max(left, right - width)), Math.Clamp(y, top, Math.Max(top, bottom - height)));
 }
 static class SettingsStore
 {
@@ -111,6 +118,7 @@ static class SettingsStore
             else settings = new() { Selected = JsonSerializer.Deserialize<Stock>(File.ReadAllText(Path.Combine(directory, "selected.json"))) };
             if (settings.Selected is Stock s && Market.Symbol(s.Symbol) != s.Symbol) settings.Selected = null;
             if (settings.Language is not ("ko" or "en")) settings.Language = Lang.Code;
+            if (settings.TickerX.HasValue != settings.TickerY.HasValue) { settings.TickerX = null; settings.TickerY = null; }
             settings.Holdings = (settings.Holdings ?? new()).Where(p => p.Value is not null && p.Value.Valid && Market.Symbol(p.Key) == p.Key).ToDictionary(p => p.Key, p => p.Value);
             return settings;
         }

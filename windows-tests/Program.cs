@@ -25,6 +25,9 @@ Check(new Holding(100.25m, 0.5m, true).Value(110.25m).Total == 55.125m, "fractio
 Check(Holding.Number("250,000") == 250000 && Holding.Number("0.5") == 0.5m, "numeric input");
 Check(Holding.Number("0") is null && Holding.Number("-1") is null && Holding.Number("NaN") is null && Holding.Number("1.123456789") is null, "invalid position inputs");
 Reject(() => new Holding(0, 10, true).Value(100), "zero cost rejected");
+Check(TickerPlacement.Clamp(300, 200, 250, 34, 0, 0, 1920, 1080) == (300, 200), "manual ticker position remains unchanged");
+Check(TickerPlacement.Clamp(2000, 1200, 250, 34, 0, 0, 1920, 1040) == (1670, 1006), "ticker returns to visible work area");
+Check(TickerPlacement.Clamp(-1900, -100, 250, 34, -1920, 0, 0, 1040) == (-1900, 0), "ticker placement supports monitor left of primary");
 var settings = new Settings { Selected = Market.Catalog[0], ShowSymbol = false, Holdings = new() { ["005930.KS"] = holding } };
 Lang.Code = "en";
 Check(Format.Ticker(settings, kr with { Price = 270000 }, false) == "$2,700.00 (+8.00%)", "total display");
@@ -48,10 +51,16 @@ try
     settings.Language = "en";
     SettingsStore.Save(directory, settings);
     var loaded = SettingsStore.Load(directory);
-    Check(loaded.Selected?.Symbol == "AAPL" && loaded.Language == "en" && loaded.ShowSymbol, "settings persistence");
+    Check(loaded.Selected?.Symbol == "AAPL" && loaded.Language == "en" && loaded.ShowSymbol && loaded.TickerX is null && loaded.TickerY is null, "settings persistence and original default placement");
     Check(loaded.Holdings["005930.KS"].Shares == 10 && !loaded.Holdings["005930.KS"].ShowTotal, "position persistence");
     var copy = loaded.Copy(); copy.Holdings.Clear();
     Check(loaded.Holdings.Count == 1, "draft does not mutate saved positions");
+    loaded.TickerX = 350; loaded.TickerY = 125;
+    SettingsStore.Save(directory, loaded);
+    var placed = SettingsStore.Load(directory);
+    Check(placed.Copy().TickerX == 350 && placed.Copy().TickerY == 125, "manual ticker placement survives restart and copy");
+    File.WriteAllText(Path.Combine(directory, "settings.json"), """{"TickerX":350}""");
+    Check(SettingsStore.Load(directory).TickerX is null, "incomplete ticker placement ignored");
     Check(Donation.Read(directory) is null, "missing donation link");
     File.WriteAllText(Path.Combine(directory, "donation.json"), """{"url":"javascript:alert(1)"}""");
     Check(Donation.Read(directory) is null, "non-HTTPS donation rejected");
