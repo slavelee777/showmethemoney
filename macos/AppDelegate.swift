@@ -51,7 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
     var selected: Stock?
     var quoteTask: Task<Void, Never>?
     var searchTask: Task<Void, Never>?
-    var timer: Timer?
+    var timer: DispatchSourceTimer?
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let data = UserDefaults.standard.data(forKey: "selectedStock"),
            let saved = try? JSONDecoder().decode(Stock.self, from: data), directSymbol(saved.symbol) == saved.symbol { selected = saved }
@@ -390,15 +390,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
             status.button?.toolTip = tip
         }
     }
-    @objc func woke() { refresh() }
+    @objc func woke() {
+        // A request suspended during sleep can otherwise occupy quoteTask indefinitely.
+        quoteTask?.cancel()
+        quoteTask = nil
+        refresh()
+    }
     func scheduleRefresh() {
-        timer?.invalidate()
+        timer?.cancel()
+        timer = nil
         guard let stock = selected else { return }
         let interval = pollDelay(symbol: stock.symbol, quote: lastQuote, failures: failures)
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.refresh() }
+        let next = DispatchSource.makeTimerSource(queue: .main)
+        next.schedule(deadline: .now() + interval, leeway: .milliseconds(500))
+        next.setEventHandler { [weak self] in
+            self?.timer = nil
+            self?.refresh()
         }
-        timer?.tolerance = 0.5
+        timer = next
+        next.resume()
     }
     func numberOfRows(in tableView: NSTableView) -> Int { results.count }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -449,7 +459,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
     }
     func refresh() {
         guard let stock = selected, quoteTask == nil else { return }
-        timer?.invalidate()
+        timer?.cancel()
+        timer = nil
         quoteTask = Task {
             defer { if !Task.isCancelled { quoteTask = nil; scheduleRefresh() } }
             do {
