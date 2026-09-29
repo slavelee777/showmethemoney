@@ -1,0 +1,56 @@
+name: Publish release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash macos/build.sh
+      - run: '"dist/Show Me The Money.app/Contents/MacOS/ShowMeTheMoney" --self-test'
+      - run: ditto -c -k --keepParent 'dist/Show Me The Money.app' dist/ShowMeTheMoney-Mac.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-mac
+          path: dist/ShowMeTheMoney-Mac.zip
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run --project windows-tests/CoreTests.csproj -c Release
+      - shell: pwsh
+        run: |
+          dotnet publish windows/ShowMeTheMoney.csproj -c Release -r win-x64 --self-contained false -o dist/windows
+          dotnet publish windows/ShowMeTheMoney.csproj -c Release -r win-arm64 --self-contained false -o dist/windows-arm64
+          Compress-Archive -Path dist/windows/* -DestinationPath dist/ShowMeTheMoney-Windows.zip
+          Compress-Archive -Path dist/windows-arm64/* -DestinationPath dist/ShowMeTheMoney-Windows-ARM64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            dist/ShowMeTheMoney-Windows.zip
+            dist/ShowMeTheMoney-Windows-ARM64.zip
+
+  publish:
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-files
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release-files/* --title "$GITHUB_REF_NAME" --generate-notes
