@@ -9,6 +9,7 @@ enum AppLanguage {
     static let english: [String: String] = [
         "현재가만 보기": "Current price only",
         "현재가 + 전일 대비 등락률": "Price + daily change",
+        "노치에 표시 (가격만)": "Show in notch (price only)",
         "평가총액 + 보유 수익률": "Holding value + return",
         "전일 대비": "Daily change",
         "직전 거래일 종가 기준 · 환율 변동 제외": "Previous trading close · Excludes FX changes",

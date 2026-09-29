@@ -8,6 +8,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         item.autosaveName = name
         return item
     }()
+    var notch: NotchOverlay?
+    let notchCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    var notchEnabled: Bool { UserDefaults.standard.bool(forKey: "notchEnabled") }
+    @objc func changeNotchMode() { setNotchEnabled(notchCheckbox.state == .on) }
+    func setNotchEnabled(_ enabled: Bool) {
+        let enabled = enabled && notch?.supported == true
+        popover.performClose(nil)
+        UserDefaults.standard.set(enabled, forKey: "notchEnabled")
+        notchCheckbox.state = enabled ? .on : .off
+        status.isVisible = !enabled
+        notch?.setVisible(enabled)
+        renderStatus()
+    }
     let popover = NSPopover()
     var outsideLocal: Any?
     var outsideGlobal: Any?
@@ -62,7 +75,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         status.button?.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         renderStatus()
         status.button?.toolTip = L("주식 검색 · 클릭하여 종목 선택")
+        notch = NotchOverlay(owner: self)
         makePopover()
+        setNotchEnabled(notchEnabled)
+        if CommandLine.arguments.contains("--notch-smoke-test") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.notch?.smoke() }
+        }
         scheduleRefresh()
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(woke), name: NSWorkspace.didWakeNotification, object: nil)
         refresh()
@@ -214,6 +232,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         refreshButton.frame = NSRect(x: 236, y: 53, width: 82, height: 28)
         refreshButton.isEnabled = selected != nil
         vc.view.addSubview(refreshButton)
+        for child in vc.view.subviews { child.frame.origin.y += 28 }
+        vc.view.frame.size.height += 28
+        notchCheckbox.frame = NSRect(x: 14, y: 6, width: 302, height: 22)
+        notchCheckbox.font = .systemFont(ofSize: 11)
+        notchCheckbox.target = self
+        notchCheckbox.action = #selector(changeNotchMode)
+        notchCheckbox.isEnabled = notch?.supported == true
+        vc.view.addSubview(notchCheckbox)
         popover.contentViewController = vc
         popover.behavior = .transient
         popover.delegate = self
@@ -227,7 +253,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
     @objc func toggle() {
         guard let button = status.button else { return }
         if popover.isShown { popover.performClose(nil); return }
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        if let notch, notchEnabled {
+            notch.enter()
+            popover.show(relativeTo: notch.view.bounds, of: notch.view, preferredEdge: .minY)
+        } else { popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY) }
         watchOutsideClicks()
         NSApp.activate(ignoringOtherApps: true)
         search.window?.makeFirstResponder(search)
@@ -255,8 +284,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         if let monitor = outsideGlobal { NSEvent.removeMonitor(monitor) }
         outsideLocal = nil; outsideGlobal = nil
     }
-    func popoverDidClose(_ notification: Notification) { stopWatchingOutsideClicks(); searchTask?.cancel() }
-    func applicationWillTerminate(_ notification: Notification) { stopWatchingOutsideClicks() }
+    func popoverDidClose(_ notification: Notification) {
+        stopWatchingOutsideClicks(); searchTask?.cancel()
+        notch?.leave()
+    }
+    func applicationWillTerminate(_ notification: Notification) {
+        stopWatchingOutsideClicks()
+        notch?.stop()
+    }
     @objc func quitApp() { NSApp.terminate(nil) }
     @objc func changeLanguage() {
         AppLanguage.code = languageMenu.indexOfSelectedItem == 0 ? "ko" : "en"
@@ -264,6 +299,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         applyLanguage()
     }
     func applyLanguage() {
+        notchCheckbox.title = L("노치에 표시 (가격만)")
+        notchCheckbox.state = notchEnabled ? .on : .off
         languageMenu.selectItem(at: AppLanguage.code == "ko" ? 0 : 1)
         search.placeholderString = L("종목명 또는 코드 검색")
         displayLabel.stringValue = L("가격에 추가 표시")
@@ -375,6 +412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         renderStatus()
     }
     func renderStatus() {
+        defer { notch?.update() }
         status.button?.image = nil
         guard let stock = selected else { status.button?.title = L("주식"); return }
         var price = lastQuote?.formatted ?? "—"

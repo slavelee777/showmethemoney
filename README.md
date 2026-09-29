@@ -8,7 +8,7 @@ A free, lightweight stock ticker for the macOS menu bar and Windows taskbar.
 작업하다가 주가 하나만 슬쩍 보고 싶어서 만들었습니다.
 Mac은 상단 메뉴바에, Windows는 작업표시줄 위 작은 창에 가격을 띄워줍니다. 무료입니다.
 
-[다운로드](https://github.com/slavelee777/showmethemoney/releases/tag/v1.0.2) · [소개 페이지](https://slavelee777.github.io/showmethemoney/) · [커피 한 잔 사주기](https://buymeacoffee.com/hglee)
+[다운로드](https://github.com/slavelee777/showmethemoney/releases/tag/v1.1.0) · [소개 페이지](https://slavelee777.github.io/showmethemoney/) · [커피 한 잔 사주기](https://buymeacoffee.com/hglee)
 
 <img src="docs/media/mac-demo.gif" width="460" alt="Mac 주식 앱 사용 예시: 종목 검색 후 선택한 주가 확인 / Search for a stock and check its price" />
 
@@ -22,6 +22,7 @@ Mac 앱 UI로 만든 10초 사용 예시입니다. 가격은 예시 데이터입
 
 - 현재가만 / 현재가 + 전일 대비 등락률 / 평가총액 + 보유 수익률 중 하나를 고릅니다.
 - 종목 코드는 별도로 켜고 끌 수 있습니다.
+- 노치가 있는 Mac에서는 가격을 노치 왼쪽에 작게 표시할 수 있습니다. 설정에서 `노치에 표시 (가격만)`을 켜세요.
 - 전일 대비는 직전 거래일 종가 기준입니다. 환율 변동은 제외하며, 기준값이 없으면 `—`로 표시합니다.
 - 평단과 수량을 넣으면 평가금액과 수익률로 바꿔 볼 수 있습니다.
 - 한국어에서는 원화(₩), 영어에서는 달러($)로 환산해서 보여줍니다.
@@ -57,12 +58,13 @@ dotnet publish windows/ShowMeTheMoney.csproj -c Release -r win-x64 --self-contai
 I made this to keep an eye on one stock while working.
 It shows the price in the Mac menu bar or a small window above the Windows taskbar. It's free.
 
-[Download 1.0.2](https://github.com/slavelee777/showmethemoney/releases/tag/v1.0.2) · [Website](https://slavelee777.github.io/showmethemoney/) · [Buy me a coffee](https://buymeacoffee.com/hglee)
+[Download 1.1.0](https://github.com/slavelee777/showmethemoney/releases/tag/v1.1.0) · [Website](https://slavelee777.github.io/showmethemoney/) · [Buy me a coffee](https://buymeacoffee.com/hglee)
 
 Unzip, launch, search for a stock, and select it. Try `AAPL`, `Samsung`, or a Korean stock code such as `005930`.
 
 - Choose current price only, price + daily change, or holding value + return.
 - Toggle the stock symbol separately.
+- On a Mac with a display notch, enable `Show in notch (price only)` to place a subtle price beside the notch.
 - Daily change uses the previous trading day’s close and excludes FX changes. Missing reference data shows `—`.
 - Enter your average cost and shares to see holding value and return.
 - Korean displays KRW (₩); English displays USD ($).
