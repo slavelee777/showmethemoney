@@ -17,7 +17,7 @@ enum AppLanguage {
         "종목 코드": "Symbol", "평가총액 + 수익률로 표시": "Show holding value + return",
         "내 보유": "My holding", "평균 매수가": "Average cost",
         "평단과 수량 입력 후 저장 · 수수료·세금 제외": "Save cost and shares · Fees/taxes excluded",
-        "저장": "Save", "주식 검색 · 클릭하여 종목 선택": "Click to search and select a stock",
+        "저장": "Save", "새로고침": "Refresh", "주식 검색 · 클릭하여 종목 선택": "Click to search and select a stock",
         "종목명 또는 코드 검색": "Search name or symbol", "가격에 추가 표시": "Show with price",
         "보유 수량 (주)": "Shares", "예: 250000": "e.g. 250000", "예: 10": "e.g. 10",
         "평균 매수가, 종목 통화 기준": "Average cost in the stock's currency",

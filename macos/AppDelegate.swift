@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
     let sharesLabel = NSTextField(labelWithString: "")
     let quitButton = NSButton()
     let donateButton = NSButton()
+    let refreshButton = NSButton()
     let languageMenu = NSPopUpButton(frame: NSRect(x: 165, y: 6, width: 100, height: 26), pullsDown: false)
     var holdings: [String: Holding] = {
         guard let data = UserDefaults.standard.data(forKey: "holdings"),
@@ -205,6 +206,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         languageMenu.action = #selector(changeLanguage)
         languageMenu.setAccessibilityLabel("Language / 언어")
         vc.view.addSubview(languageMenu)
+        sourceLabel.frame.size.width = 216
+        refreshButton.target = self
+        refreshButton.action = #selector(refreshNow)
+        refreshButton.bezelStyle = .rounded
+        refreshButton.font = .systemFont(ofSize: 11)
+        refreshButton.frame = NSRect(x: 236, y: 53, width: 82, height: 28)
+        refreshButton.isEnabled = selected != nil
+        vc.view.addSubview(refreshButton)
         popover.contentViewController = vc
         popover.behavior = .transient
         popover.delegate = self
@@ -265,6 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         dailyRadio.toolTip = L("직전 거래일 종가 기준 · 환율 변동 제외")
         sharesLabel.stringValue = L("보유 수량 (주)")
         saveHoldingButton.title = L("저장")
+        refreshButton.title = L("새로고침")
         quitButton.title = L("종료")
         donateButton.title = L("♡ 개발자 후원하기")
         donateButton.toolTip = donationURL == nil ? L("후원 링크 준비 중") : L("브라우저에서 개발자 후원 페이지 열기")
@@ -396,6 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         quoteTask = nil
         refresh()
     }
+    @objc func refreshNow() { refresh() }
     func scheduleRefresh() {
         timer?.cancel()
         timer = nil
@@ -461,8 +472,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSSearchFieldDelegate,
         guard let stock = selected, quoteTask == nil else { return }
         timer?.cancel()
         timer = nil
+        refreshButton.isEnabled = false
         quoteTask = Task {
-            defer { if !Task.isCancelled { quoteTask = nil; scheduleRefresh() } }
+            defer {
+                if !Task.isCancelled {
+                    quoteTask = nil
+                    refreshButton.isEnabled = selected != nil
+                    scheduleRefresh()
+                }
+            }
             do {
                 var quote = try await latestQuote(stock.symbol)
                 quote.exchange = await ExchangeCache.shared.latest()

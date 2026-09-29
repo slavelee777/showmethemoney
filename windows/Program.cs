@@ -18,6 +18,7 @@ sealed class SearchForm : Form
     readonly Button save = new() { Dock = DockStyle.Fill };
     readonly Label message = new() { Dock = DockStyle.Fill, AutoEllipsis = true };
     readonly Label sourceLabel = new() { Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = SystemColors.GrayText };
+    readonly Button reload = new() { Dock = DockStyle.Fill };
     readonly Button donate = new() { Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat };
     readonly ComboBox language = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
     readonly Button quit = new() { Dock = DockStyle.Fill };
@@ -25,6 +26,7 @@ sealed class SearchForm : Form
     readonly Func<Settings> state;
     readonly Func<Settings, bool> commit;
     readonly Func<Stock, bool> choose;
+    readonly Action refreshNow;
     readonly Uri? donation;
     CancellationTokenSource? pending;
     bool binding;
@@ -32,9 +34,9 @@ sealed class SearchForm : Form
     bool failed;
     int quoteFailures;
 
-    public SearchForm(Func<Settings> state, Func<Settings, bool> commit, Func<Stock, bool> choose, Action exit)
+    public SearchForm(Func<Settings> state, Func<Settings, bool> commit, Func<Stock, bool> choose, Action refreshNow, Action exit)
     {
-        this.state = state; this.commit = commit; this.choose = choose;
+        this.state = state; this.commit = commit; this.choose = choose; this.refreshNow = refreshNow;
         donation = Donation.Read(AppContext.BaseDirectory);
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10);
@@ -54,7 +56,11 @@ sealed class SearchForm : Form
         inputs.Controls.Add(average, 0, 1); inputs.Controls.Add(shares, 1, 1); inputs.Controls.Add(save, 2, 1);
         root.Controls.Add(inputs, 0, 5); var modes = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, ColumnCount = 1, RowCount = 3 };
         foreach (var radio in new[] { priceOnly, daily, total }) { modes.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333f)); modes.Controls.Add(radio); }
-        root.Controls.Add(modes, 0, 6); root.Controls.Add(message, 0, 7); root.Controls.Add(sourceLabel, 0, 8);
+        root.Controls.Add(modes, 0, 6); root.Controls.Add(message, 0, 7);
+        var sourceRow = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, ColumnCount = 2, RowCount = 1 };
+        sourceRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 76)); sourceRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24));
+        sourceRow.Controls.Add(sourceLabel, 0, 0); sourceRow.Controls.Add(reload, 1, 0);
+        root.Controls.Add(sourceRow, 0, 8);
         var footer = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, ColumnCount = 3, RowCount = 1 };
         foreach (float percent in new[] { 48f, 32f, 20f }) footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, percent));
         footer.Controls.Add(donate, 0, 0); footer.Controls.Add(language, 1, 0); footer.Controls.Add(quit, 2, 0);
@@ -67,6 +73,7 @@ sealed class SearchForm : Form
             catch { Error(T("브라우저를 열 수 없습니다", "Could not open your browser")); }
         };
         quit.Click += (_, _) => exit();
+        reload.Click += (_, _) => refreshNow();
         search.TextChanged += async (_, _) => await Search();
         list.MouseClick += (_, e) => { if (list.IndexFromPoint(e.Location) >= 0) SelectStock(); };
         list.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) SelectStock(); };
@@ -96,7 +103,7 @@ sealed class SearchForm : Form
         KeyDown += (_, e) => { if (e.KeyCode == Keys.Escape) { Hide(); e.Handled = true; } };
         FormClosing += (_, e) => { if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); } };
         VisibleChanged += (_, _) => { if (!Visible) pending?.Cancel(); };
-        Fill(Market.Local("")); LoadHolding(); ApplyLanguage();
+        Fill(Market.Local("")); LoadHolding(); ApplyLanguage(); SetRefreshing(false);
     }
     void DismissIfInactive()
     {
@@ -154,7 +161,7 @@ sealed class SearchForm : Form
         priceOnly.Text = T("현재가만 보기", "Current price only");
         daily.Text = T("현재가 + 전일 대비 등락률", "Price + daily change");
         tips.SetToolTip(daily, T("직전 거래일 종가 기준 · 환율 변동 제외", "Previous trading close · Excludes FX changes"));
-        sharesLabel.Text = T("보유 수량 (주)", "Shares"); save.Text = T("저장", "Save"); quit.Text = T("종료", "Quit");
+        sharesLabel.Text = T("보유 수량 (주)", "Shares"); save.Text = T("저장", "Save"); reload.Text = T("새로고침", "Refresh"); quit.Text = T("종료", "Quit");
         average.PlaceholderText = T("예: 250000", "e.g. 250000"); shares.PlaceholderText = T("예: 10", "e.g. 10");
         average.AccessibleName = T("평균 매수가, 종목 통화 기준", "Average cost in stock currency"); shares.AccessibleName = T("보유 수량", "Number of shares");
         donate.Text = T("♡ 개발자 후원하기", "♡ Buy me a coffee");
@@ -167,6 +174,7 @@ sealed class SearchForm : Form
         UpdateQuote(lastQuote, failed);
         binding = false;
     }
+    public void SetRefreshing(bool refreshing) => reload.Enabled = !refreshing && state().Selected is not null;
     public void UpdateQuote(Quote? quote, bool failed, int? failures = null)
     {
         lastQuote = quote; this.failed = failed;
@@ -234,7 +242,7 @@ sealed class StockApp : ApplicationContext
         settings = SettingsStore.Load(directory); Code = settings.Language;
         appIcon = File.Exists(Path.Combine(AppContext.BaseDirectory, "AppIcon.ico")) ? new Icon(Path.Combine(AppContext.BaseDirectory, "AppIcon.ico")) : (Icon)SystemIcons.Information.Clone();
         tray = new NotifyIcon { Icon = appIcon, Visible = true };
-        search = new SearchForm(() => settings, Commit, Select, () => ExitThread());
+        search = new SearchForm(() => settings, Commit, Select, () => _ = Refresh(), () => ExitThread());
         ticker.Controls.Add(price); ticker.Icon = appIcon; search.Icon = appIcon;
         price.MouseDown += (_, e) => {
             if (e.Button != MouseButtons.Left) return;
@@ -339,6 +347,7 @@ sealed class StockApp : ApplicationContext
         if (exiting || settings.Selected is not Stock stock || request is not null) return;
         timer.Stop();
         var source = new CancellationTokenSource(); request = source;
+        search.SetRefreshing(true);
         try
         {
             var result = await Market.Latest(stock.Symbol, source.Token);
@@ -351,7 +360,7 @@ sealed class StockApp : ApplicationContext
         finally {
             if (request == source) {
                 request = null;
-                if (!exiting) { timer.Interval = Market.PollDelay(stock.Symbol, quote, failures); timer.Start(); }
+                if (!exiting) { search.SetRefreshing(false); timer.Interval = Market.PollDelay(stock.Symbol, quote, failures); timer.Start(); }
             }
             source.Dispose();
         }
