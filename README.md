@@ -50,6 +50,7 @@ dotnet publish windows/ShowMeTheMoney.csproj -c Release -r win-x64 --self-contai
 ```
 
 소개 페이지는 `docs/`, 이전 Electron 초안은 `archive/electron-prototype/`에 있습니다.
+웹 소스와 개발 도구는 보안 패치가 적용된 Node.js 22.23.4로 고정했습니다. `nvm install`과 `nvm use`로 `.nvmrc`의 버전을 적용한 뒤 npm 명령을 실행하세요. 다른 Node.js 버전에서는 npm 의존성 설치가 차단됩니다. Electron 초안을 실행할 경우에는 Electron에 내장된 Node.js의 보안 업데이트도 별도로 확인해야 합니다.
 불편한 점이나 버그는 [Issues](https://github.com/slavelee777/showmethemoney/issues)에 남겨주세요.
 
 

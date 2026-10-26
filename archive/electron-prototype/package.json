@@ -2,6 +2,7 @@
   "name": "show-me-the-money",
   "version": "1.0.0",
   "private": true,
+  "engines": { "node": "22.23.4" },
   "description": "한국·미국 주식을 메뉴 막대에서 확인하는 데스크톱 앱",
   "author": "Show Me The Money",
   "main": "src/main.js",
